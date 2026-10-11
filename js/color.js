@@ -157,7 +157,7 @@ function makeWheel(cv) {
 function placeColorPop() {
   var pop = $('#colorPop'), r = $('#colorChip').getBoundingClientRect(), m = 8;
   var w = pop.offsetWidth, h = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight, x, y;
-  if (!window.matchMedia('(max-width: 860px)').matches) { x = r.right + m; y = r.bottom - h; } // beside the rail chip
+  if (!window.matchMedia('(max-width: 860px)').matches) { x = r.right + m; y = r.top - 14; } // beside the rail chip
   else { x = r.right - w; y = r.bottom + m; } // phone layout: the rail is a top bar
   pop.style.left = clamp(x, m, Math.max(m, vw - w - m)) + 'px';
   pop.style.top = clamp(y, m, Math.max(m, vh - h - m)) + 'px';
@@ -179,13 +179,13 @@ function initColor() {
   setColor(S.color, false); renderRecent(); renderSaved();
 
   $('#colorChip').addEventListener('click', function () { if ($('#colorPop').hidden) openColorPop(); else closeColorPop(); });
-  // A tap outside closes the pop-up. On the canvas that tap only closes it, so it never leaves a stray mark.
+  // The pop-up stays open while drawing on the canvas. A tap on the rest of the interface closes it.
   document.addEventListener('pointerdown', function (e) {
     var pop = $('#colorPop');
-    if (pop.hidden || pop.contains(e.target) || $('#colorChip').contains(e.target)) return;
+    if (pop.hidden || pop.contains(e.target) || $('#colorChip').contains(e.target) || vp.contains(e.target)) return;
     closeColorPop();
-    if (vp.contains(e.target)) { e.stopPropagation(); e.preventDefault(); }
-  }, true);
+  });
+  $('#popClose').addEventListener('click', closeColorPop);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeColorPop(); });
   window.addEventListener('resize', function () { if (!$('#colorPop').hidden) placeColorPop(); });
 

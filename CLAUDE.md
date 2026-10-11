@@ -46,7 +46,7 @@ It was first built in Claude and published as a private artifact (https://claude
 - **Color:** `S.color` is the hex in use, and `S.hsv` keeps hue and saturation so they survive at black, white and greys. Always change color through `setColor(hex, remember, hsv)`, which redraws both wheels (Color tab and pop-up) and every swatch. `remember` adds the color to Recent.
   - **Saved colors** (`S.saved`, max 60) start as `SWATCHES`. The + button adds the current color, and the pencil toggles remove mode. They are stored in `users/{uid}/settings/colors` when signed in, or in `localStorage` `sketchroom.colors` when signed out. On a user's first sign-in, the browser's list seeds the account doc. After that, the account doc wins.
   - **Recent** (12) is per browser, in `sketchroom.recent`.
-  - **The pop-up** opens from `#colorChip`. A tap outside it closes it, and a tap on the canvas only closes it: a capture-phase `pointerdown` listener stops that event, so it never draws.
+  - **The pop-up** opens from `#colorChip`, which sits on the tool rail just under the hand (grab) tool. It stays open while you draw on the canvas, so you can switch colors between strokes. The chip, its × button, Esc, or a tap anywhere else in the interface (tabs, top bar, dock) closes it. The owner asked for this behavior.
 
 ## Hosting and accounts
 
