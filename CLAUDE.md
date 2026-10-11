@@ -64,7 +64,7 @@ Run `tools/serve.ps1` (or start the `sketchroom` entry in `.claude/launch.json`)
 
 ## Deploying
 
-Commit and push to `main` on GitHub. That's all: there is no build. The Firebase compat SDK version is pinned in `index.html` (currently 12.19.0). When upgrading it, change all three script tags together.
+Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` number** on `styles.css` and every `js/` script tag in `index.html` before each push that changes CSS or JS. GitHub Pages lets browsers cache files for 10 minutes (`max-age=600`), and a normal reload refetches `index.html` but reuses cached scripts. Without the bump, a visitor can get the new page with old scripts, startup throws, and the page shows no brushes and no Sign in button (this happened on 2026-10-11). Git push works from Claude's shell (credentials are cached in Git Credential Manager). The Firebase compat SDK version is pinned in `index.html` (currently 12.19.0). When upgrading it, change all three script tags together.
 
 ## Conventions
 
