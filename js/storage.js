@@ -8,7 +8,9 @@
    Saved colors: users/{uid}/settings/colors { colors: [...] } when signed in, otherwise localStorage.
    Admins: admins/{uid} exists. Created by hand in the Firebase console. */
 var store = { online: false, add: null, update: null, remove: null, addFont: null, signIn: null, signOut: null,
-  saveColors: async function (list) { saveLocalColors(list); } };
+  saveColors: async function (list) { saveLocalColors(list); },
+  // Without Firebase, uploaded fonts last until the page reloads, and suggestions are not available.
+  addUploadedFont: async function () {}, removeUploadedFont: async function () {}, requestShare: null };
 function fontDocId(family) { return family.replace(/[^A-Za-z0-9]/g, '-').toLowerCase(); }
 // Saved colors in this browser. They start as the default swatches.
 function localColors() {
@@ -73,6 +75,16 @@ async function initStore() {
     if (auth.currentUser) await home().collection('settings').doc('colors').set({ colors: list, at: Date.now() });
     else saveLocalColors(list);
   };
+  // Uploaded font files, base64 in users/{uid}/uploadedFonts (under the 1 MB document limit).
+  store.addUploadedFont = async function (family, data) { await home().collection('uploadedFonts').doc(fontDocId(family)).set({ family: family, data: data, at: Date.now() }); };
+  store.removeUploadedFont = async function (family) { await home().collection('uploadedFonts').doc(fontDocId(family)).delete(); };
+  // Suggestions for the free library: requests/{uid}_{brushId}. Admins add or decline them.
+  store.requestShare = async function (item) {
+    var u = auth.currentUser; if (!u) throw new Error('signed out');
+    await db.collection('requests').doc(u.uid + '_' + item.id).set({ name: item.name, params: item.params, at: Date.now(), by: u.uid, byName: (S.myName || '').slice(0, 80), brushId: item.id });
+  };
+  store.approveRequest = async function (r) { await store.add(r.name, cleanParams(r.params), 'library'); await db.collection('requests').doc(r.id).delete(); };
+  store.declineRequest = async function (r) { await db.collection('requests').doc(r.id).delete(); };
 
   lib.brushes.orderBy('at', 'asc').limit(500).onSnapshot(function (snap) {
     S.library = brushList(snap, 'library'); renderBrushes();
@@ -85,7 +97,7 @@ async function initStore() {
     unsub.forEach(function (u) { u(); }); unsub = [];
     S.myId = user ? user.uid : null;
     S.myName = user ? (user.displayName || user.email || 'You') : '';
-    S.canEdit = false; S.mine = []; S.myFonts = [];
+    S.canEdit = false; S.mine = []; S.myFonts = []; S.requests = []; S.myRequests = []; S.uploadedFonts = [];
     if (user) {
       var mine = db.collection('users').doc(user.uid);
       try { S.canEdit = (await db.collection('admins').doc(user.uid).get()).exists; } catch (e) { S.canEdit = false; }
@@ -103,8 +115,28 @@ async function initStore() {
         // so an offline cache miss never overwrites real saved colors.
         else if (!snap.metadata.fromCache) colors.set({ colors: S.saved, at: Date.now() }).catch(function () { /* keep the device colors */ });
       }, function () { /* keep the device colors */ }));
+      unsub.push(mine.collection('uploadedFonts').limit(50).onSnapshot(async function (snap) {
+        var fams = [];
+        for (var i = 0; i < snap.docs.length; i++) {
+          var v = snap.docs[i].data() || {};
+          if (typeof v.family === 'string' && typeof v.data === 'string' && await registerUploadedFont(v.family, v.data)) fams.push(v.family);
+        }
+        S.uploadedFonts = fams; rebuildFonts(); renderUploadedFonts();
+      }, function () { /* uploaded fonts are optional */ }));
+      var reqs = db.collection('requests');
+      if (S.canEdit) {
+        unsub.push(reqs.orderBy('at', 'asc').limit(100).onSnapshot(function (snap) {
+          S.requests = snap.docs.map(function (d) { var v = d.data() || {}; return { id: d.id, name: String(v.name || 'Brush'), params: P(v.params || {}), byName: String(v.byName || ''), by: v.by }; });
+          renderBrushes();
+        }, function () { /* suggestions are optional */ }));
+      } else {
+        unsub.push(reqs.where('by', '==', user.uid).onSnapshot(function (snap) {
+          S.myRequests = snap.docs.map(function (d) { return String((d.data() || {}).brushId || ''); });
+          renderBrushes();
+        }, function () { /* suggestions are optional */ }));
+      }
     } else S.saved = localColors();
-    renderAccount(); renderBrushes(); rebuildFonts(); renderSaved();
+    renderAccount(); renderBrushes(); rebuildFonts(); renderSaved(); renderUploadedFonts();
   });
 }
 

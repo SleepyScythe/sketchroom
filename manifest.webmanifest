@@ -1,0 +1,14 @@
+{
+  "name": "Sketchroom",
+  "short_name": "Sketchroom",
+  "description": "A drawing app with pressure-aware brushes, a brush editor, layers and text.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14181c",
+  "theme_color": "#14181c",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

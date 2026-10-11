@@ -32,6 +32,7 @@ function rebuildFonts() {
   var mine = S.myFonts.filter(function (f) { return BUILTIN_FONTS.indexOf(f) < 0 && free.indexOf(f) < 0; });
   group('Free library', free);
   group(store.online ? 'Your fonts' : 'Added on this device', mine);
+  group('Uploaded', S.uploadedFonts);
   free.concat(mine).forEach(function (f) { loadFamily(f).catch(function () {}); });
   sel.value = cur; if (sel.value !== cur) { sel.value = BUILTIN_FONTS[0]; S.text.font = sel.value; }
   updateFontPrev();
@@ -39,6 +40,60 @@ function rebuildFonts() {
 function updateFontPrev() {
   var p = $('#fontPrev'); p.style.fontFamily = '"' + S.text.font + '", sans-serif';
   p.style.fontWeight = S.text.bold ? '700' : '400'; p.style.fontStyle = S.text.italic ? 'italic' : 'normal';
+}
+
+/* ---------- uploaded font files ---------- */
+var MAX_FONT_BYTES = 700 * 1024, uploadedFaces = {};
+function bytesToBase64(buf) {
+  var bytes = new Uint8Array(buf), s = '';
+  for (var i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function base64ToBytes(b64) { var s = atob(b64), out = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; }
+// Registers a font file with the browser under its family name. Returns false if the browser can't use it.
+async function registerUploadedFont(family, data) {
+  if (uploadedFaces[family]) return true;
+  try {
+    var face = new FontFace(family, typeof data === 'string' ? base64ToBytes(data) : data);
+    await face.load(); document.fonts.add(face);
+    uploadedFaces[family] = face; loadedFamilies[family] = true; return true;
+  } catch (e) { return false; }
+}
+function fontNameFromFile(name) {
+  var n = name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/[^A-Za-z0-9 ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (n.length < 2) n = 'My Font';
+  // Don't shadow a built-in or Google font with the same name.
+  if (BUILTIN_FONTS.indexOf(n) >= 0 || S.sharedFonts.indexOf(n) >= 0 || S.myFonts.indexOf(n) >= 0) n = (n.slice(0, 33) + ' Upload').trim();
+  return n;
+}
+async function uploadFont(file) {
+  if (!file) return;
+  if (!/\.(ttf|otf|woff2?)$/i.test(file.name)) { toast('Choose a .ttf, .otf, .woff or .woff2 font file.'); return; }
+  if (file.size > MAX_FONT_BYTES) { toast('That font file is over 700 KB. Try its .woff2 version, which is smaller.'); return; }
+  var buf = await file.arrayBuffer(), family = fontNameFromFile(file.name), b64 = bytesToBase64(buf);
+  if (!(await registerUploadedFont(family, buf))) { toast('That file is not a font this browser can use.'); return; }
+  try { await store.addUploadedFont(family, b64); }
+  catch (e) { toast('Could not save that font to your account. Try again.'); return; }
+  if (S.uploadedFonts.indexOf(family) < 0) S.uploadedFonts = S.uploadedFonts.concat([family]);
+  S.text.font = family; rebuildFonts(); $('#fontSel').value = family; updateFontPrev(); renderUploadedFonts();
+  toast(family + (store.online ? ' uploaded to your account.' : ' added until you reload. Sign-in is not available here.'));
+}
+function renderUploadedFonts() {
+  var host = $('#uploadedFonts'); host.innerHTML = '';
+  S.uploadedFonts.forEach(function (f) {
+    var row = document.createElement('div'); row.className = 'fontrow';
+    var nm = document.createElement('span'); nm.textContent = f; nm.style.fontFamily = '"' + f + '", sans-serif';
+    var del = document.createElement('button'); del.className = 'ibtn sm'; del.innerHTML = icon('x', 14);
+    del.setAttribute('aria-label', 'Remove font ' + f); del.title = 'Remove font';
+    del.addEventListener('click', function () {
+      store.removeUploadedFont(f).then(function () {
+        S.uploadedFonts = S.uploadedFonts.filter(function (x) { return x !== f; });
+        if (uploadedFaces[f]) { document.fonts.delete(uploadedFaces[f]); delete uploadedFaces[f]; delete loadedFamilies[f]; }
+        rebuildFonts(); renderUploadedFonts();
+      }, function () { toast('Could not remove that font. Try again.'); });
+    });
+    row.append(nm, del); host.appendChild(row);
+  });
 }
 
 /* ---------- text tool ---------- */
@@ -62,7 +117,7 @@ function drawGhost(pos) {
 }
 async function placeText(pos) {
   if (!S.text.str.trim()) { toast('Type some text in the Text tab first.'); return; }
-  var L = activeLayer(); if (!L.visible) { toast('This layer is hidden. Show it to draw on it.'); return; }
+  var L = activeLayer(); if (!canDraw(L)) return;
   await ensureFont();
   var snap = crop(L.canvas, 0, 0, DOC_W, DOC_H);
   var bb = drawText(L.ctx, pos, S.brush.opacity / 100);

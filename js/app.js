@@ -21,7 +21,7 @@ function wire() {
 
   vp.addEventListener('pointerdown', onDown); vp.addEventListener('pointermove', onMove);
   vp.addEventListener('pointerup', onUp); vp.addEventListener('pointercancel', onUp);
-  vp.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') { ring.hidden = true; if (!cur) octx.clearRect(0, 0, DOC_W, DOC_H); } });
+  vp.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') { ring.hidden = true; if (!cur && S.tool === 'text') octx.clearRect(0, 0, DOC_W, DOC_H); } });
   vp.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   vp.addEventListener('wheel', function (e) {
     e.preventDefault();
@@ -37,11 +37,21 @@ function wire() {
   });
   $('#exportPng').addEventListener('click', function () { exportPng(false); });
   $('#exportPngT').addEventListener('click', function () { exportPng(true); });
-  var nd = $('#newDoc'), ndTimer = 0;
-  nd.addEventListener('click', function (e) {
-    if (!nd.classList.contains('armed')) { e.stopPropagation(); nd.classList.add('armed'); nd.textContent = 'Click again to erase everything'; ndTimer = setTimeout(function () { nd.classList.remove('armed'); nd.textContent = 'New drawing'; }, 3000); return; }
-    clearTimeout(ndTimer); nd.classList.remove('armed'); nd.textContent = 'New drawing'; newDoc();
-  });
+  // Buttons that throw away the current drawing ask for a second click first.
+  var armed = function (btn, label, warning, action) {
+    var timer = 0;
+    btn.addEventListener('click', function (e) {
+      if (!btn.classList.contains('armed')) {
+        e.stopPropagation(); btn.classList.add('armed'); btn.textContent = warning;
+        timer = setTimeout(function () { btn.classList.remove('armed'); btn.textContent = label; }, 3000); return;
+      }
+      clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; action();
+    });
+  };
+  armed($('#newDoc'), 'New drawing', 'Click again to erase everything', newDoc);
+  armed($('#openFile'), 'Open drawing file', 'Click again to replace this drawing', function () { $('#openFileInput').click(); });
+  $('#openFileInput').addEventListener('change', function (e) { openDrawingFile(e.target.files[0]); e.target.value = ''; });
+  $('#saveFile').addEventListener('click', saveDrawingFile);
 
   $('#followChk').addEventListener('change', function (e) { S.brush.follow = e.target.checked; brushChanged(); });
   $('#brushName').addEventListener('input', function (e) { S.brushName = e.target.value; });
@@ -64,14 +74,33 @@ function wire() {
     catch (e) { toast('Could not update the brush.'); }
   });
   $('#revertBrush').addEventListener('click', function () { S.brush = P(S.base); S.dirty = false; syncSliders(); updateEditorButtons(); drawEdit(); });
+  $('#suggestBrush').addEventListener('click', async function () {
+    var c = currentSaved(); if (!c || c.where !== 'mine' || !store.requestShare) return;
+    try { await store.requestShare(c); toast('Sent to the owner. If they like it, it joins the free brushes.'); }
+    catch (e) { toast('Could not send that brush. Try again.'); }
+  });
+  $('#exportBrushes').addEventListener('click', exportBrushes);
+  // Signing in has to happen straight from a click, so when signed out the first press signs in and the second picks the file.
+  var pickAfterSignIn = function (input) {
+    return async function () {
+      if (store.online && !S.myId) { if (await store.signIn()) toast('Signed in. Press the button again to choose a file.'); return; }
+      $(input).click();
+    };
+  };
+  $('#importBrushes').addEventListener('click', pickAfterSignIn('#importBrushesFile'));
+  $('#importBrushesFile').addEventListener('change', function (e) { importBrushes(e.target.files[0]); e.target.value = ''; });
 
-  $('#lAdd').addEventListener('click', addLayer); $('#lDup').addEventListener('click', dupLayer);
-  $('#lUp').addEventListener('click', function () { moveLayer(1); }); $('#lDown').addEventListener('click', function () { moveLayer(-1); });
-  $('#lDel').addEventListener('click', delLayer);
+  // Layer actions land any pixels that are being moved with the selection tool first.
+  var settled = function (fn) { return function () { dropSelection(); fn(); }; };
+  $('#lAdd').addEventListener('click', settled(addLayer)); $('#lDup').addEventListener('click', settled(dupLayer));
+  $('#lUp').addEventListener('click', settled(function () { moveLayer(1); })); $('#lDown').addEventListener('click', settled(function () { moveLayer(-1); }));
+  $('#lDel').addEventListener('click', settled(delLayer)); $('#lMerge').addEventListener('click', settled(mergeDown));
+  $('#lImport').addEventListener('click', function () { $('#lImportFile').click(); });
+  $('#lImportFile').addEventListener('change', function (e) { dropSelection(); importImage(e.target.files[0]); e.target.value = ''; });
   var lc = $('#lClear'), lcTimer = 0;
   lc.addEventListener('click', function () {
     if (!lc.classList.contains('armed')) { lc.classList.add('armed', 'warn'); lc.textContent = 'Sure?'; lcTimer = setTimeout(function () { lc.classList.remove('armed', 'warn'); lc.textContent = 'Clear'; }, 3000); return; }
-    clearTimeout(lcTimer); lc.classList.remove('armed', 'warn'); lc.textContent = 'Clear'; clearLayer();
+    clearTimeout(lcTimer); lc.classList.remove('armed', 'warn'); lc.textContent = 'Clear'; dropSelection(); clearLayer();
   });
   $('#layerName').addEventListener('input', function (e) { S.active.name = e.target.value || 'Layer'; var rows = $$('#layerList .lrow'); var idx = S.layers.length - 1 - S.layers.indexOf(S.active); if (rows[idx]) $('.ln', rows[idx]).textContent = S.active.name; scheduleSave(); });
   $('#blendSel').addEventListener('change', function (e) { S.active.blend = e.target.value; S.active.canvas.style.mixBlendMode = S.active.blend; scheduleSave(); });
@@ -93,6 +122,8 @@ function wire() {
     } catch (e) { toast('Could not save that font. Try again.'); }
     btn.disabled = false;
   });
+  $('#fontUploadBtn').addEventListener('click', pickAfterSignIn('#fontUploadFile'));
+  $('#fontUploadFile').addEventListener('change', function (e) { uploadFont(e.target.files[0]); e.target.value = ''; });
 
   $('#accountBtn').addEventListener('click', function (e) {
     e.stopPropagation();
@@ -110,8 +141,10 @@ function wire() {
     if (typing || mod) return;
     var k = e.key.toLowerCase();
     if (k === ' ') { e.preventDefault(); spaceDown = true; vp.style.cursor = 'grab'; ring.hidden = true; return; }
-    if (k === 'b') setTool('brush'); else if (k === 'e') setTool('eraser'); else if (k === 't') { showTab('text'); }
-    else if (k === 'i') setTool('picker'); else if (k === 'h') setTool('hand');
+    if (S.sel && (k === 'escape' || k === 'enter')) { dropSelection(true); return; }
+    if (S.sel && (k === 'delete' || k === 'backspace')) { e.preventDefault(); deleteSelection(); return; }
+    var keys = { b: 'brush', e: 'eraser', s: 'smudge', g: 'fill', l: 'line', u: 'shape', m: 'select', i: 'picker', h: 'hand' };
+    if (keys[k]) setTool(keys[k]); else if (k === 't') { showTab('text'); }
     else if (k === '[' || k === ']') {
       var p = curParams(), f = k === ']' ? 1.15 : 1 / 1.15;
       p.size = clamp(Math.round(p.size * f) + (k === ']' ? 1 : -1) * (p.size < 10 ? 0 : 0), 1, 300); if (Math.round(p.size * f) === p.size) p.size = clamp(p.size + (k === ']' ? 1 : -1), 1, 300);
@@ -129,8 +162,10 @@ function wire() {
 /* ---------- start ---------- */
 async function init() {
   var L = makeLayer('Layer ' + (++layerCount)); S.layers.push(L); S.active = L; renderStack();
-  buildSliders(); wire(); initPad(); initColor();
+  buildSliders(); wire(); initPad(); initColor(); initTools();
   setTool('brush');
+  // Installable app: the service worker lets the app open offline. It always tries the network first, so updates show up.
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(function () { /* optional */ });
   selectBrush('pen', 'Technical Pen', PRESETS[1].p);
   renderBrushes(); renderLayers(); rebuildFonts(); updateHist();
   requestAnimationFrame(function () { fit(); });

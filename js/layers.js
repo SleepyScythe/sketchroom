@@ -5,9 +5,15 @@
 /* ---------- layers ---------- */
 function makeLayer(name) {
   var c = document.createElement('canvas'); c.width = DOC_W; c.height = DOC_H;
-  return { id: uid(), name: name, canvas: c, ctx: c.getContext('2d'), visible: true, opacity: 1, blend: 'normal' };
+  return { id: uid(), name: name, canvas: c, ctx: c.getContext('2d'), visible: true, opacity: 1, blend: 'normal', locked: false };
 }
 function activeLayer() { return S.active; }
+// Every tool that changes pixels asks this first.
+function canDraw(L) {
+  if (!L.visible) { toast('This layer is hidden. Show it to draw on it.'); return false; }
+  if (L.locked) { toast('This layer is locked. Unlock it in the Layers tab to change it.'); return false; }
+  return true;
+}
 function renderStack() {
   S.layers.forEach(function (L) {
     stage.appendChild(L.canvas);
@@ -27,8 +33,8 @@ function removeLayer(L) {
 var H = { undo: [], redo: [] };
 function pushHist(e) { H.undo.push(e); if (H.undo.length > 80) H.undo.shift(); H.redo.length = 0; updateHist(); scheduleSave(); }
 function updateHist() { $('#undoBtn').disabled = !H.undo.length; $('#redoBtn').disabled = !H.redo.length; }
-function undo() { var e = H.undo.pop(); if (!e) return; abortStroke(); e.undo(); H.redo.push(e); updateHist(); scheduleSave(); }
-function redo() { var e = H.redo.pop(); if (!e) return; e.redo(); H.undo.push(e); updateHist(); scheduleSave(); }
+function undo() { abortStroke(); dropSelection(); var e = H.undo.pop(); if (!e) return; e.undo(); H.redo.push(e); updateHist(); scheduleSave(); }
+function redo() { abortStroke(); dropSelection(); var e = H.redo.pop(); if (!e) return; e.redo(); H.undo.push(e); updateHist(); scheduleSave(); }
 function crop(src, x, y, w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h); return c; }
 function restore(L, img, x, y) { L.ctx.globalCompositeOperation = 'source-over'; L.ctx.globalAlpha = 1; L.ctx.clearRect(x, y, img.width, img.height); L.ctx.drawImage(img, x, y); }
 function recordCrop(L, snap, bb) {
@@ -56,6 +62,7 @@ function delLayer() {
   pushHist({ undo: function () { insertLayer(L, idx); }, redo: function () { removeLayer(L); } });
 }
 function clearLayer() {
+  if (S.active.locked) { toast('This layer is locked. Unlock it to clear it.'); return; }
   var L = S.active, before = crop(L.canvas, 0, 0, DOC_W, DOC_H);
   L.ctx.clearRect(0, 0, DOC_W, DOC_H);
   pushHist({ undo: function () { restore(L, before, 0, 0); }, redo: function () { L.ctx.clearRect(0, 0, DOC_W, DOC_H); } });
@@ -66,6 +73,42 @@ function moveLayer(dir) {
   var swap = function (a, b2) { var t = S.layers[a]; S.layers[a] = S.layers[b2]; S.layers[b2] = t; renderStack(); renderLayers(); };
   swap(i, j);
   pushHist({ undo: function () { swap(j, i); }, redo: function () { swap(i, j); } });
+}
+function mergeDown() {
+  var L = S.active, i = S.layers.indexOf(L), B = S.layers[i - 1];
+  if (!B) { toast('There is no layer below to merge into.'); return; }
+  if (!L.visible) { toast('Show this layer before merging it.'); return; }
+  if (L.locked || B.locked) { toast('Unlock both layers to merge them.'); return; }
+  var before = crop(B.canvas, 0, 0, DOC_W, DOC_H);
+  B.ctx.globalAlpha = L.opacity; B.ctx.globalCompositeOperation = L.blend === 'normal' ? 'source-over' : L.blend;
+  B.ctx.drawImage(L.canvas, 0, 0);
+  B.ctx.globalAlpha = 1; B.ctx.globalCompositeOperation = 'source-over';
+  var after = crop(B.canvas, 0, 0, DOC_W, DOC_H);
+  var apply = function () { restore(B, after, 0, 0); removeLayer(L); S.active = B; renderLayers(); };
+  removeLayer(L); S.active = B; renderLayers();
+  pushHist({ undo: function () { restore(B, before, 0, 0); insertLayer(L, i); }, redo: apply });
+}
+function toggleLock(L) { L.locked = !L.locked; renderLayers(); scheduleSave(); }
+// Import a picture to trace: it goes under the current layer, locked, at 40% opacity.
+function importImage(file) {
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { toast('Choose an image file.'); return; }
+  var url = URL.createObjectURL(file), img = new Image();
+  img.onload = function () {
+    URL.revokeObjectURL(url);
+    var name = file.name.replace(/\.[^.]+$/, '').trim().slice(0, 30) || 'Reference';
+    var L = makeLayer(name), k = Math.min(DOC_W / img.naturalWidth, DOC_H / img.naturalHeight);
+    var w = img.naturalWidth * k, h = img.naturalHeight * k;
+    L.ctx.imageSmoothingQuality = 'high'; L.ctx.drawImage(img, (DOC_W - w) / 2, (DOC_H - h) / 2, w, h);
+    L.opacity = 0.4; L.locked = true;
+    var keep = S.active, idx = S.layers.indexOf(keep);
+    var add = function () { insertLayer(L, idx); S.active = keep; renderLayers(); };
+    add();
+    pushHist({ undo: function () { removeLayer(L); S.active = keep; renderLayers(); }, redo: add });
+    toast('Image added under your layer, locked at 40% opacity. Draw on top to trace it.');
+  };
+  img.onerror = function () { URL.revokeObjectURL(url); toast('That image could not be opened.'); };
+  img.src = url;
 }
 var layerOpacitySlider;
 function renderLayers() {
@@ -78,8 +121,12 @@ function renderLayers() {
     eye.setAttribute('aria-label', (L.visible ? 'Hide ' : 'Show ') + L.name);
     eye.addEventListener('click', function (ev) { ev.stopPropagation(); L.visible = !L.visible; renderStack(); renderLayers(); scheduleSave(); });
     var nm = document.createElement('span'); nm.className = 'ln'; nm.textContent = L.name;
-    row.append(eye, nm);
-    var pick = function () { S.active = L; renderLayers(); };
+    var lock = document.createElement('button'); lock.className = 'ibtn lockbtn'; lock.innerHTML = icon(L.locked ? 'lock' : 'unlock', 16);
+    lock.setAttribute('aria-label', (L.locked ? 'Unlock ' : 'Lock ') + L.name); lock.title = L.locked ? 'Locked. Click to unlock' : 'Lock this layer';
+    lock.setAttribute('aria-pressed', String(L.locked));
+    lock.addEventListener('click', function (ev) { ev.stopPropagation(); toggleLock(L); });
+    row.append(eye, nm, lock);
+    var pick = function () { if (L !== S.active) dropSelection(); S.active = L; renderLayers(); };
     row.addEventListener('click', pick);
     row.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
     host.appendChild(row);

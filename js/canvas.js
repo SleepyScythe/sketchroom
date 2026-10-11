@@ -6,6 +6,7 @@
 function applyView() {
   var v = S.view; stage.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.s + ')';
   $('#zoomVal').textContent = Math.round(v.s * 100) + '%';
+  if (S.sel) drawSelOverlay(); // the outline width depends on the zoom
 }
 function fit() {
   var r = vp.getBoundingClientRect(); if (!r.width) return;
@@ -22,15 +23,17 @@ function docPos(e) { var r = vp.getBoundingClientRect(); return { x: (e.clientX 
 
 /* ---------- tools ---------- */
 function setTool(t) {
+  if (t !== 'select') dropSelection(true);
   S.tool = t;
   $$('[data-tool]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tool === t)); });
   vp.style.cursor = t === 'hand' ? 'grab' : (t === 'text' ? 'text' : 'crosshair');
-  ring.hidden = true; octx.clearRect(0, 0, DOC_W, DOC_H);
-  syncSliders();
+  ring.hidden = true; if (!S.sel) octx.clearRect(0, 0, DOC_W, DOC_H);
+  syncSliders(); updateQuick();
 }
 
 /* ---------- pointer handling ---------- */
-var pointers = new Map(), cur = null, panState = null, pinch = null, spaceDown = false;
+// cur is a brush or eraser stroke. drag is any other tool's press-and-drag ({ id, move(e), end(e), cancel() }), from tools.js and select.js.
+var pointers = new Map(), cur = null, drag = null, panState = null, pinch = null, spaceDown = false;
 function readPressure(type, ev, parent, lastP) {
   if (type !== 'pen') return 1;
   var p = ev.pressure;
@@ -65,6 +68,10 @@ function onDown(e) {
   var pos = docPos(e);
   if (S.tool === 'picker') { var c = sampleAt(pos); if (c) setColor(c, true); return; }
   if (S.tool === 'text') { placeText(pos); return; }
+  if (S.tool === 'fill') { fillAt(pos); return; }
+  if (S.tool === 'line' || S.tool === 'shape') { beginShape(e, pos); return; }
+  if (S.tool === 'smudge') { beginSmudge(e, pos); return; }
+  if (S.tool === 'select') { selectDown(e, pos); return; }
   beginStroke(e);
 }
 function onMove(e) {
@@ -83,24 +90,26 @@ function onMove(e) {
     S.view.x = panState.vx + (e.clientX - panState.sx); S.view.y = panState.vy + (e.clientY - panState.sy); S.userZoomed = true; applyView(); return;
   }
   if (cur && e.pointerId === cur.id) { addPoints(e); return; }
+  if (drag && e.pointerId === drag.id) { drag.move(e); return; }
   if (e.pointerType !== 'touch') {
-    if (S.tool === 'brush' || S.tool === 'eraser') {
+    if (S.tool === 'brush' || S.tool === 'eraser' || S.tool === 'smudge' || S.tool === 'line') {
       var d2 = curParams().size * S.view.s, rr = vp.getBoundingClientRect();
       ring.hidden = d2 < 4 || spaceDown; ring.style.width = ring.style.height = d2 + 'px';
       ring.style.left = (e.clientX - rr.left) + 'px'; ring.style.top = (e.clientY - rr.top) + 'px';
     } else { ring.hidden = true; }
-    if (S.tool === 'text') drawGhost(docPos(e));
+    if (S.tool === 'text') drawGhost(docPos(e)); else if (S.tool === 'select') selHover(e);
   }
 }
 function onUp(e) {
   pointers.delete(e.pointerId);
   if (cur && e.pointerId === cur.id) endStroke();
+  if (drag && e.pointerId === drag.id) { var d = drag; drag = null; if (e.type === 'pointercancel' && d.cancel) d.cancel(); else d.end(e); }
   if (panState && e.pointerId === panState.id) { panState = null; vp.style.cursor = S.tool === 'hand' ? 'grab' : (S.tool === 'text' ? 'text' : 'crosshair'); }
   if (pinch && touchList().length < 2) pinch = null;
 }
 function beginStroke(e) {
   var L = activeLayer();
-  if (!L.visible) { toast('This layer is hidden. Show it to draw on it.'); return; }
+  if (!canDraw(L)) return;
   var isEr = S.tool === 'eraser', b = isEr ? S.eraser : S.brush;
   var snap = document.createElement('canvas'); snap.width = DOC_W; snap.height = DOC_H; snap.getContext('2d').drawImage(L.canvas, 0, 0);
   var target, color = isEr ? '#000000' : S.color;
@@ -134,6 +143,7 @@ function endStroke() {
   if (!c.isEr) setColor(S.color, true);
 }
 function abortStroke() {
+  if (drag) { var d = drag; drag = null; if (d.cancel) d.cancel(); }
   if (!cur) return;
   var c = cur; cur = null;
   c.L.ctx.globalCompositeOperation = 'source-over'; c.L.ctx.globalAlpha = 1;

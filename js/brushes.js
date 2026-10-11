@@ -18,9 +18,9 @@ function makeSlider(label, min, max, unit, get, set, log) {
   wrap.append(l, o, i); wrap.sync(); return wrap;
 }
 var quickSliders = [], editSliders = [];
-function curParams() { return S.tool === 'eraser' ? S.eraser : S.brush; }
+function curParams() { return S.tool === 'eraser' ? S.eraser : S.tool === 'smudge' ? S.smudge : S.brush; }
 function buildSliders() {
-  var q = $('#quick');
+  var q = $('#qPaint');
   [['size', 'Size', 1, 300, 'px', true], ['opacity', 'Opacity', 1, 100, '%']].forEach(function (d) {
     var s = makeSlider(d[1], d[2], d[3], d[4], function () { return curParams()[d[0]]; }, function (v) { curParams()[d[0]] = v; brushChanged(true); }, d[5]);
     quickSliders.push(s); q.appendChild(s);
@@ -41,7 +41,7 @@ function buildSliders() {
 }
 var previewRaf = 0;
 function brushChanged(fromQuick) {
-  if (S.tool !== 'eraser') S.dirty = true;
+  if (curParams() === S.brush) S.dirty = true;
   syncSliders(fromQuick);
   cancelAnimationFrame(previewRaf); previewRaf = requestAnimationFrame(drawEdit);
   updateEditorButtons();
@@ -51,14 +51,15 @@ function syncSliders(skipQuick) {
   editSliders.forEach(function (s) { s.sync(); });
   $$('#shapeSeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.shape === S.brush.shape)); });
   $('#followChk').checked = !!S.brush.follow;
-  $('#quickWho').textContent = S.tool === 'eraser' ? 'Eraser' : S.brushName + (S.dirty ? ' (edited)' : '');
+  $('#quickWho').textContent = quickTitle();
 }
 function drawEdit() { if (!$('#pane-edit').hidden) drawPreview($('#editPreview'), S.brush, cssVar('--fg')); }
 
 /* ---------- brush library ---------- */
 function selectBrush(id, name, params) {
   S.base = P(params); S.brush = P(params); S.brushId = id; S.brushName = name; S.dirty = false;
-  if (S.tool === 'eraser' || S.tool === 'hand' || S.tool === 'picker') setTool('brush');
+  // Line and Shapes draw with the chosen brush, so they stay. Tools that don't use a brush switch to Brush.
+  if (['eraser', 'hand', 'picker', 'fill', 'smudge', 'select'].indexOf(S.tool) >= 0) setTool('brush');
   $('#brushName').value = name;
   syncSliders(); markSelected(); updateEditorButtons(); drawEdit();
 }
@@ -70,6 +71,9 @@ function updateEditorButtons() {
   $('#saveUpdate').disabled = !(cur && canModify(cur));
   $('#revertBrush').disabled = !S.dirty;
   $('#saveLibrary').hidden = !S.canEdit;
+  var sug = $('#suggestBrush'), pending = !!cur && S.myRequests.indexOf(cur.id) >= 0;
+  sug.hidden = !store.online || !S.myId || S.canEdit || !cur || cur.where !== 'mine';
+  sug.disabled = pending; sug.textContent = pending ? 'Suggested, waiting for review' : 'Suggest for free library';
   var hint = $('#editHint');
   if (!store.online) hint.textContent = 'Saved brushes stay on this device in this browser.';
   else if (!S.myId) hint.textContent = 'Sign in with Google to save your own brushes. They follow you to any device.';
@@ -82,7 +86,8 @@ function makeCard(id, name, params, c) {
   var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = name;
   var cv = document.createElement('canvas'); cv.width = 260; cv.height = 76;
   var by = document.createElement('span'); by.className = 'by';
-  by.textContent = !c || c.where === 'library' ? 'Free' : store.online ? 'Mine' : 'On this device';
+  by.textContent = !c || c.where === 'library' ? 'Free' : !store.online ? 'On this device'
+    : S.myRequests.indexOf(c.id) >= 0 ? 'Mine, suggested' : 'Mine';
   d.append(nm, cv, by);
   if (c) {
     if (canModify(c)) {
@@ -108,7 +113,58 @@ function renderBrushes() {
   PRESETS.forEach(function (p) { fg.appendChild(makeCard(p.id, p.name, p.p, null)); });
   S.library.forEach(function (c) { fg.appendChild(makeCard(c.id, c.name, c.params, c)); });
   fillGrid($('#mineGrid'), S.mine, store.online && !S.myId ? 'Sign in to save your own brushes.' : 'No saved brushes yet. Open the Edit tab, shape a brush and press Save to my brushes.');
+  renderRequests();
   markSelected(); updateEditorButtons();
+}
+// Admins see brushes that testers suggested for the free library, with Add and Decline.
+function renderRequests() {
+  var show = S.canEdit && S.requests.length > 0, grid = $('#requestGrid');
+  $('#requestSection').hidden = !show; grid.innerHTML = '';
+  if (!show) return;
+  S.requests.forEach(function (r) {
+    var d = makeCard('req-' + r.id, r.name, r.params, null);
+    $('.by', d).textContent = 'From ' + (r.byName || 'a tester');
+    var row = document.createElement('div'); row.className = 'reqrow';
+    var ok = document.createElement('button'); ok.className = 'btn sm primary'; ok.textContent = 'Add';
+    var no = document.createElement('button'); no.className = 'btn sm'; no.textContent = 'Decline';
+    ok.addEventListener('click', function (ev) {
+      ev.stopPropagation(); ok.disabled = no.disabled = true;
+      store.approveRequest(r).then(function () { toast(r.name + ' is now in the free library.'); }, function () { ok.disabled = no.disabled = false; toast('Could not add that brush. Try again.'); });
+    });
+    no.addEventListener('click', function (ev) {
+      ev.stopPropagation(); ok.disabled = no.disabled = true;
+      store.declineRequest(r).catch(function () { ok.disabled = no.disabled = false; toast('Could not decline that brush. Try again.'); });
+    });
+    row.append(ok, no); d.appendChild(row); grid.appendChild(d);
+  });
+}
+
+/* ---------- brush files (import and export) ---------- */
+// Only known settings, clamped to the slider ranges, so a hand-edited file can't break the engine.
+function cleanParams(p) {
+  var r = P({}); p = p || {};
+  SCHEMA.forEach(function (d) { var v = Number(p[d[0]]); if (isFinite(v)) r[d[0]] = clamp(Math.round(v), d[2], d[3]); });
+  r.shape = SHAPES.some(function (s) { return s[0] === p.shape; }) ? p.shape : 'round';
+  r.follow = !!p.follow; return r;
+}
+function exportBrushes() {
+  if (!S.mine.length) { toast('You have no saved brushes to export yet.'); return; }
+  var data = { app: 'sketchroom-brushes', version: 1, brushes: S.mine.map(function (c) { return { name: c.name, params: c.params }; }) };
+  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'sketchroom-brushes.json');
+  toast('Exported ' + S.mine.length + ' brush' + (S.mine.length === 1 ? '' : 'es') + '.');
+}
+async function importBrushes(file) {
+  if (!file) return;
+  var data = null;
+  try { data = JSON.parse(await file.text()); } catch (e) { data = null; }
+  var list = data && Array.isArray(data.brushes) ? data.brushes : null;
+  if (!list || !list.length) { toast('That file has no Sketchroom brushes in it.'); return; }
+  list = list.slice(0, 100); var n = 0;
+  for (var i = 0; i < list.length; i++) {
+    var b = list[i] || {}, name = String(b.name || 'Brush').trim().slice(0, 40) || 'Brush';
+    try { await store.add(name, cleanParams(b.params), 'mine'); n++; } catch (e) { /* keep going with the rest */ }
+  }
+  toast(n ? 'Imported ' + n + ' brush' + (n === 1 ? '' : 'es') + ' into My brushes.' : 'Could not import those brushes. Try again.');
 }
 function fillGrid(grid, list, emptyText) {
   grid.innerHTML = '';

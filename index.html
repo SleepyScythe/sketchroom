@@ -10,8 +10,14 @@
 <meta property="og:description" content="A drawing app in your browser, with pressure-aware brushes, a brush editor, layers and text.">
 <meta property="og:type" content="website">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sketchroom">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&family=Caveat&family=Permanent+Marker&family=Pacifico&family=Bebas+Neue&family=Playfair+Display&family=Lobster&family=Press+Start+2P&family=Special+Elite&family=Abril+Fatface&family=Cinzel&family=Shadows+Into+Light&family=Oswald&family=Indie+Flower&family=Dancing+Script&family=Righteous&family=Bangers&family=Amatic+SC&family=Rock+Salt&family=Satisfy&family=Anton&family=Archivo+Black&family=Monoton&family=Cormorant+Garamond&family=DM+Serif+Display&family=Syne&family=Space+Mono&display=swap">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 <div class="app">
@@ -31,8 +37,11 @@
         <div class="menu" id="fileMenu" hidden>
           <button id="exportPng">Export PNG</button>
           <button id="exportPngT">Export PNG, transparent background</button>
+          <button id="saveFile">Save drawing file</button>
+          <button id="openFile">Open drawing file</button>
           <button id="newDoc">New drawing</button>
         </div>
+        <input type="file" id="openFileInput" accept=".json,application/json" hidden>
       </div>
       <div class="menu-wrap" id="accountWrap" hidden>
         <button class="btn account" id="accountBtn" aria-haspopup="true" aria-expanded="false">Sign in</button>
@@ -48,6 +57,11 @@
     <nav class="tools" aria-label="Tools">
       <button class="ibtn" data-tool="brush" title="Brush (B)" aria-label="Brush" data-icon="pen"></button>
       <button class="ibtn" data-tool="eraser" title="Eraser (E)" aria-label="Eraser" data-icon="eraser"></button>
+      <button class="ibtn" data-tool="smudge" title="Smudge (S)" aria-label="Smudge" data-icon="smudge"></button>
+      <button class="ibtn" data-tool="fill" title="Fill (G)" aria-label="Fill" data-icon="fill"></button>
+      <button class="ibtn" data-tool="line" title="Line (L). Hold Shift to snap the angle" aria-label="Line" data-icon="line"></button>
+      <button class="ibtn" data-tool="shape" title="Shapes (U). Hold Shift for a square or circle" aria-label="Shapes" data-icon="shapes"></button>
+      <button class="ibtn" data-tool="select" title="Select and move (M)" aria-label="Select and move" data-icon="select"></button>
       <button class="ibtn" data-tool="text" title="Text (T)" aria-label="Text" data-icon="type"></button>
       <button class="ibtn" data-tool="picker" title="Color picker (I)" aria-label="Color picker" data-icon="pipette"></button>
       <button class="ibtn" data-tool="hand" title="Move canvas (H or hold Space)" aria-label="Move canvas" data-icon="hand"></button>
@@ -61,7 +75,28 @@
     </section>
 
     <aside class="dock" aria-label="Brush, layer and color settings">
-      <div class="quick" id="quick"><div class="who" id="quickWho">Brush</div></div>
+      <div class="quick" id="quick">
+        <div class="who" id="quickWho">Brush</div>
+        <div class="qgroup" id="qPaint"></div>
+        <div class="qgroup" id="qFill" hidden>
+          <label class="check"><input type="checkbox" id="fillAll"> Use all visible layers to find the edges</label>
+        </div>
+        <div class="qgroup" id="qShape" hidden>
+          <div class="seg" role="group" aria-label="Shape">
+            <button data-shape-kind="rect" aria-pressed="true">Rectangle</button><button data-shape-kind="ellipse" aria-pressed="false">Ellipse</button>
+          </div>
+          <div class="seg" role="group" aria-label="Shape style">
+            <button data-shape-fill="0" aria-pressed="true">Outline</button><button data-shape-fill="1" aria-pressed="false">Filled</button>
+          </div>
+        </div>
+        <div class="qgroup" id="qSelect" hidden>
+          <div class="seg" role="group" aria-label="Selection shape">
+            <button data-sel-kind="rect" aria-pressed="true">Rectangle</button><button data-sel-kind="free" aria-pressed="false">Freehand</button>
+          </div>
+          <div class="tools-row"><button class="btn" id="selNone">Deselect</button><button class="btn" id="selDelete">Delete selected</button></div>
+          <p class="hint">Drag around part of the active layer, then drag inside the selection to move it.</p>
+        </div>
+      </div>
       <div class="tabs" role="tablist" id="tabs">
         <button class="tab" role="tab" data-tab="brushes" aria-selected="true">Brushes</button>
         <button class="tab" role="tab" data-tab="edit" aria-selected="false">Edit</button>
@@ -71,11 +106,20 @@
       </div>
 
       <div class="pane" id="pane-brushes">
+        <div class="section" id="requestSection" hidden>
+          <h3>Suggested for the free library</h3>
+          <div class="bgrid" id="requestGrid"></div>
+        </div>
         <h3>Free brushes</h3>
         <div class="bgrid" id="freeGrid"></div>
         <h3>My brushes</h3>
         <div class="bgrid" id="mineGrid"></div>
         <p class="hint">Tweak any brush in the Edit tab, then save it to My brushes.</p>
+        <div class="tools-row">
+          <button class="btn" id="exportBrushes">Export my brushes</button>
+          <button class="btn" id="importBrushes">Import brushes</button>
+          <input type="file" id="importBrushesFile" accept=".json,application/json" hidden>
+        </div>
       </div>
 
       <div class="pane" id="pane-edit" hidden>
@@ -99,6 +143,7 @@
           <button class="btn" id="saveUpdate">Update this brush</button>
           <button class="btn" id="revertBrush">Revert changes</button>
           <button class="btn" id="saveLibrary" hidden>Add to free library</button>
+          <button class="btn" id="suggestBrush" hidden>Suggest for free library</button>
         </div>
         <p class="hint" id="editHint"></p>
       </div>
@@ -110,9 +155,15 @@
           <button class="ibtn" id="lDup" title="Duplicate layer" aria-label="Duplicate layer" data-icon="copy"></button>
           <button class="ibtn" id="lUp" title="Move layer up" aria-label="Move layer up" data-icon="up"></button>
           <button class="ibtn" id="lDown" title="Move layer down" aria-label="Move layer down" data-icon="down"></button>
+          <button class="ibtn" id="lMerge" title="Merge into the layer below" aria-label="Merge into the layer below" data-icon="merge"></button>
           <button class="btn" id="lClear">Clear</button>
           <button class="ibtn" id="lDel" title="Delete layer" aria-label="Delete layer" data-icon="trash"></button>
         </div>
+        <div class="tools-row">
+          <button class="btn" id="lImport">Import image to trace</button>
+          <input type="file" id="lImportFile" accept="image/*" hidden>
+        </div>
+        <p class="hint">The lock next to each layer stops it from being drawn on. Imported images come in locked, at 40% opacity, under your current layer.</p>
         <div>
           <h3 style="margin-bottom:6px">Layer name</h3>
           <input type="text" id="layerName" maxlength="30" aria-label="Layer name">
@@ -156,6 +207,13 @@
           <div class="inline"><input type="text" id="fontAdd" placeholder="Name from fonts.google.com" maxlength="40" aria-label="Google Fonts family name"><button class="btn" id="fontAddBtn">Add</button></div>
           <p class="hint" style="margin-top:6px">Fonts you add are saved to your account.</p>
         </div>
+        <div>
+          <h3 style="margin-bottom:6px">Upload a font file</h3>
+          <button class="btn" id="fontUploadBtn">Choose a font file</button>
+          <input type="file" id="fontUploadFile" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" hidden>
+          <div class="fontlist" id="uploadedFonts"></div>
+          <p class="hint" style="margin-top:6px">.ttf, .otf, .woff or .woff2, up to 700 KB. Saved to your account, so it follows you to any device.</p>
+        </div>
       </div>
     </aside>
   </div>
@@ -179,18 +237,20 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=4"></script>
-<script src="js/core.js?v=4"></script>
-<script src="js/config.js?v=4"></script>
-<script src="js/engine.js?v=4"></script>
-<script src="js/layers.js?v=4"></script>
-<script src="js/brushes.js?v=4"></script>
-<script src="js/storage.js?v=4"></script>
-<script src="js/text.js?v=4"></script>
-<script src="js/canvas.js?v=4"></script>
-<script src="js/color.js?v=4"></script>
-<script src="js/pad.js?v=4"></script>
-<script src="js/files.js?v=4"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/firebase-config.js?v=5"></script>
+<script src="js/core.js?v=5"></script>
+<script src="js/config.js?v=5"></script>
+<script src="js/engine.js?v=5"></script>
+<script src="js/layers.js?v=5"></script>
+<script src="js/brushes.js?v=5"></script>
+<script src="js/storage.js?v=5"></script>
+<script src="js/text.js?v=5"></script>
+<script src="js/canvas.js?v=5"></script>
+<script src="js/color.js?v=5"></script>
+<script src="js/tools.js?v=5"></script>
+<script src="js/select.js?v=5"></script>
+<script src="js/pad.js?v=5"></script>
+<script src="js/files.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>
