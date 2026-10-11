@@ -1,0 +1,101 @@
+/* Sketchroom: Brush and font storage. Firebase (Google sign-in + Firestore) when configured, otherwise localStorage.
+   Plain script. Shares globals with the other files in js/; load order is set in index.html. */
+'use strict';
+
+/* ---------- storage ----------
+   Free library: brushes/{id}, fonts/{id}. Everyone reads, admins write.
+   Private: users/{uid}/brushes/{id}, users/{uid}/fonts/{id}. Only that user.
+   Admins: admins/{uid} exists. Created by hand in the Firebase console. */
+var store = { online: false, add: null, update: null, remove: null, addFont: null, signIn: null, signOut: null };
+function fontDocId(family) { return family.replace(/[^A-Za-z0-9]/g, '-').toLowerCase(); }
+function localStore() {
+  var read = function (k) { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { return []; } };
+  var write = function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } };
+  var save = function () { write('sketchroom.brushes', S.mine.map(function (c) { return { id: c.id, name: c.name, params: c.params, at: c.at }; })); };
+  S.mine = read('sketchroom.brushes').map(function (c) { return { id: c.id, name: String(c.name || 'Brush'), params: P(c.params || {}), at: c.at, where: 'mine' }; });
+  S.myFonts = read('sketchroom.fonts');
+  store.add = async function (name, params) { var id = uid() + uid(); S.mine.push({ id: id, name: name, params: params, at: Date.now(), where: 'mine' }); save(); renderBrushes(); return id; };
+  store.update = async function (item, name, params) { S.mine.forEach(function (c) { if (c.id === item.id) { c.name = name; c.params = params; } }); save(); renderBrushes(); };
+  store.remove = async function (item) { S.mine = S.mine.filter(function (c) { return c.id !== item.id; }); save(); renderBrushes(); };
+  store.addFont = async function (family) { if (S.myFonts.indexOf(family) < 0) S.myFonts.push(family); write('sketchroom.fonts', S.myFonts); rebuildFonts(); };
+}
+function brushList(snap, where) {
+  return snap.docs.map(function (d) { var v = d.data() || {}; return { id: d.id, name: String(v.name || 'Brush'), params: P(v.params || {}), at: v.at, where: where }; });
+}
+function fontList(snap) {
+  return snap.docs.map(function (d) { return String((d.data() || {}).family || ''); }).filter(Boolean);
+}
+async function initStore() {
+  var fb = window.firebase, cfg = window.FIREBASE_CONFIG;
+  var web = location.protocol === 'http:' || location.protocol === 'https:';
+  if (!fb || !cfg || !web) { localStore(); renderBrushes(); rebuildFonts(); renderAccount(); return; }
+  try { fb.initializeApp(cfg); } catch (e) { localStore(); renderBrushes(); rebuildFonts(); renderAccount(); return; }
+  var db = fb.firestore(), auth = fb.auth();
+  store.online = true;
+  var lib = { brushes: db.collection('brushes'), fonts: db.collection('fonts') };
+  var unsub = [];
+  // Read the signed-in user from auth directly: right after signInWithPopup, onAuthStateChanged may not have run yet.
+  var home = function () { if (!auth.currentUser) throw new Error('signed out'); return db.collection('users').doc(auth.currentUser.uid); };
+  var col = function (where) { return where === 'library' ? lib.brushes : home().collection('brushes'); };
+
+  store.add = async function (name, params, where) {
+    var id = uid() + uid(), data = { name: name, params: params, at: Date.now() };
+    if (where === 'library') data.by = auth.currentUser.uid;
+    await col(where).doc(id).set(data); return id;
+  };
+  store.update = async function (item, name, params) { await col(item.where).doc(item.id).update({ name: name, params: params }); };
+  store.remove = async function (item) { await col(item.where).doc(item.id).delete(); };
+  store.addFont = async function (family) {
+    var data = { family: family, at: Date.now() };
+    if (S.canEdit) { data.by = auth.currentUser.uid; await lib.fonts.doc(fontDocId(family)).set(data); }
+    else await home().collection('fonts').doc(fontDocId(family)).set(data);
+  };
+  store.signIn = async function () {
+    try { await auth.signInWithPopup(new fb.auth.GoogleAuthProvider()); return true; }
+    catch (e) {
+      var quiet = e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request');
+      if (e && e.code === 'auth/popup-blocked') toast('Your browser blocked the sign-in window. Allow pop-ups for this site and try again.');
+      else if (e && e.code === 'auth/unauthorized-domain') toast('Sign-in is not set up for this address yet.');
+      else if (!quiet) toast('Could not sign in. Try again.');
+      return false;
+    }
+  };
+  store.signOut = async function () { await auth.signOut(); toast('Signed out.'); };
+
+  lib.brushes.orderBy('at', 'asc').limit(500).onSnapshot(function (snap) {
+    S.library = brushList(snap, 'library'); renderBrushes();
+  }, function () { toast('Free brushes are not available right now.'); });
+  lib.fonts.orderBy('at', 'asc').limit(200).onSnapshot(function (snap) {
+    S.sharedFonts = fontList(snap); rebuildFonts();
+  }, function () { /* fonts fall back to the built-in list */ });
+
+  auth.onAuthStateChanged(async function (user) {
+    unsub.forEach(function (u) { u(); }); unsub = [];
+    S.myId = user ? user.uid : null;
+    S.myName = user ? (user.displayName || user.email || 'You') : '';
+    S.canEdit = false; S.mine = []; S.myFonts = [];
+    if (user) {
+      var mine = db.collection('users').doc(user.uid);
+      try { S.canEdit = (await db.collection('admins').doc(user.uid).get()).exists; } catch (e) { S.canEdit = false; }
+      if (S.myId !== user.uid) return; // signed out again while checking
+      unsub.push(mine.collection('brushes').orderBy('at', 'asc').limit(500).onSnapshot(function (snap) {
+        S.mine = brushList(snap, 'mine'); renderBrushes();
+      }, function () { toast('Your brushes could not be loaded.'); }));
+      unsub.push(mine.collection('fonts').orderBy('at', 'asc').limit(200).onSnapshot(function (snap) {
+        S.myFonts = fontList(snap); rebuildFonts();
+      }, function () { /* fonts fall back to the built-in list */ }));
+    }
+    renderAccount(); renderBrushes(); rebuildFonts();
+  });
+}
+
+/* ---------- account button ---------- */
+function renderAccount() {
+  $('#accountWrap').hidden = !store.online;
+  var btn = $('#accountBtn');
+  btn.textContent = S.myId ? S.myName.split(' ')[0] : 'Sign in';
+  btn.title = S.myId ? 'Signed in as ' + S.myName : 'Sign in with Google to save your own brushes';
+  btn.classList.toggle('primary', !S.myId);
+  $('#accountName').textContent = S.myId ? S.myName + (S.canEdit ? ' (owner)' : '') : '';
+  if (!S.myId) $('#accountMenu').hidden = true;
+}

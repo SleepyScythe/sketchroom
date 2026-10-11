@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Sketchroom Firestore rules. Paste into Firebase console > Firestore Database > Rules, then Publish.
+// Free library (brushes, fonts): everyone reads, admins write.
+// users/{uid}/...: private to that signed-in user.
+// admins/{uid}: created by hand in the console. Nobody can write it from the app.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function isUser(uid) { return signedIn() && request.auth.uid == uid; }
+    function validBrush(d) {
+      return d.keys().hasOnly(['name', 'params', 'at', 'by'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 40
+        && d.params is map && d.params.size() <= 40
+        && d.at is number;
+    }
+    function validFont(d) {
+      return d.keys().hasOnly(['family', 'at', 'by'])
+        && d.family is string && d.family.size() >= 2 && d.family.size() <= 40
+        && d.at is number;
+    }
+
+    match /brushes/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin() && validBrush(request.resource.data);
+      allow delete: if isAdmin();
+    }
+    match /fonts/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin() && validFont(request.resource.data);
+      allow delete: if isAdmin();
+    }
+    match /users/{uid}/brushes/{id} {
+      allow read, delete: if isUser(uid);
+      allow create, update: if isUser(uid) && validBrush(request.resource.data);
+    }
+    match /users/{uid}/fonts/{id} {
+      allow read, delete: if isUser(uid);
+      allow create, update: if isUser(uid) && validFont(request.resource.data);
+    }
+    match /admins/{uid} {
+      allow read: if isUser(uid);
+    }
+  }
+}

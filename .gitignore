@@ -1,0 +1,5 @@
+# Original single-file build, kept on disk for reference only (see CLAUDE.md)
+sketchroom.html
+
+# Personal Claude Code settings
+.claude/settings.local.json

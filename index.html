@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sketchroom</title>
+<meta name="description" content="Sketchroom is a drawing app in your browser, with pressure-aware brushes, a brush editor, layers and text.">
+<meta name="theme-color" content="#14181c">
+<meta property="og:title" content="Sketchroom">
+<meta property="og:description" content="A drawing app in your browser, with pressure-aware brushes, a brush editor, layers and text.">
+<meta property="og:type" content="website">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&family=Caveat&family=Permanent+Marker&family=Pacifico&family=Bebas+Neue&family=Playfair+Display&family=Lobster&family=Press+Start+2P&family=Special+Elite&family=Abril+Fatface&family=Cinzel&family=Shadows+Into+Light&family=Oswald&family=Indie+Flower&family=Dancing+Script&family=Righteous&family=Bangers&family=Amatic+SC&family=Rock+Salt&family=Satisfy&family=Anton&family=Archivo+Black&family=Monoton&family=Cormorant+Garamond&family=DM+Serif+Display&family=Syne&family=Space+Mono&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="logo">Sketchroom</span><span class="savestate" id="saveState" aria-live="polite"></span></div>
+    <div class="top-actions">
+      <button class="ibtn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo" data-icon="undo" disabled></button>
+      <button class="ibtn" id="redoBtn" title="Redo (Shift+Ctrl+Z)" aria-label="Redo" data-icon="redo" disabled></button>
+      <span class="sep zoomgroup"></span>
+      <button class="ibtn zoomgroup" id="zoomOut" title="Zoom out" aria-label="Zoom out" data-icon="minus"></button>
+      <button class="zoomval zoomgroup" id="zoomVal" title="Reset to 100%">100%</button>
+      <button class="ibtn zoomgroup" id="zoomIn" title="Zoom in" aria-label="Zoom in" data-icon="plus"></button>
+      <button class="ibtn zoomgroup" id="zoomFit" title="Fit canvas to screen" aria-label="Fit canvas to screen" data-icon="fit"></button>
+      <span class="sep"></span>
+      <div class="menu-wrap">
+        <button class="btn" id="fileBtn" aria-haspopup="true" aria-expanded="false">File</button>
+        <div class="menu" id="fileMenu" hidden>
+          <button id="exportPng">Export PNG</button>
+          <button id="exportPngT">Export PNG, transparent background</button>
+          <button id="newDoc">New drawing</button>
+        </div>
+      </div>
+      <div class="menu-wrap" id="accountWrap" hidden>
+        <button class="btn account" id="accountBtn" aria-haspopup="true" aria-expanded="false">Sign in</button>
+        <div class="menu" id="accountMenu" hidden>
+          <span class="menu-note" id="accountName"></span>
+          <button id="signOut">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="work">
+    <nav class="tools" aria-label="Tools">
+      <button class="ibtn" data-tool="brush" title="Brush (B)" aria-label="Brush" data-icon="pen"></button>
+      <button class="ibtn" data-tool="eraser" title="Eraser (E)" aria-label="Eraser" data-icon="eraser"></button>
+      <button class="ibtn" data-tool="text" title="Text (T)" aria-label="Text" data-icon="type"></button>
+      <button class="ibtn" data-tool="picker" title="Color picker (I)" aria-label="Color picker" data-icon="pipette"></button>
+      <button class="ibtn" data-tool="hand" title="Move canvas (H or hold Space)" aria-label="Move canvas" data-icon="hand"></button>
+      <span class="grow"></span>
+      <button class="chip" id="colorChip" title="Current color" aria-label="Current color. Open color tab"></button>
+    </nav>
+
+    <section class="viewport" id="vp" aria-label="Drawing canvas">
+      <div id="stage"></div>
+      <div id="ring" hidden></div>
+      <div id="toast" role="status"></div>
+    </section>
+
+    <aside class="dock" aria-label="Brush, layer and color settings">
+      <div class="quick" id="quick"><div class="who" id="quickWho">Brush</div></div>
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" role="tab" data-tab="brushes" aria-selected="true">Brushes</button>
+        <button class="tab" role="tab" data-tab="edit" aria-selected="false">Edit</button>
+        <button class="tab" role="tab" data-tab="layers" aria-selected="false">Layers</button>
+        <button class="tab" role="tab" data-tab="color" aria-selected="false">Color</button>
+        <button class="tab" role="tab" data-tab="text" aria-selected="false">Text</button>
+      </div>
+
+      <div class="pane" id="pane-brushes">
+        <h3>Presets</h3>
+        <div class="bgrid" id="presetGrid"></div>
+        <div class="section" id="librarySection" hidden>
+          <h3>Free brushes</h3>
+          <div class="bgrid" id="libraryGrid"></div>
+        </div>
+        <h3>My brushes</h3>
+        <div class="bgrid" id="mineGrid"></div>
+        <p class="hint">Tweak any brush in the Edit tab, then save it to My brushes.</p>
+      </div>
+
+      <div class="pane" id="pane-edit" hidden>
+        <div class="padwrap">
+          <canvas id="editPreview" width="480" height="180" aria-label="Brush preview stroke"></canvas>
+          <canvas id="testPad" width="480" height="180" aria-label="Test pad. Draw here to try the brush"></canvas>
+        </div>
+        <div class="padbar"><span class="hint" id="pressureReadout">Draw on the pad above to try this brush and see the pressure your pen sends.</span><button class="btn" id="padClear">Clear pad</button></div>
+        <div id="editSliders" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div>
+          <h3 style="margin-bottom:6px">Tip shape</h3>
+          <div class="seg" id="shapeSeg" role="group" aria-label="Tip shape"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="followChk"> Turn the tip with the stroke direction</label>
+        <div>
+          <h3 style="margin-bottom:6px">Brush name</h3>
+          <input type="text" id="brushName" maxlength="40" aria-label="Brush name">
+        </div>
+        <div class="tools-row">
+          <button class="btn primary" id="saveNew">Save to my brushes</button>
+          <button class="btn" id="saveUpdate">Update this brush</button>
+          <button class="btn" id="revertBrush">Revert changes</button>
+          <button class="btn" id="saveLibrary" hidden>Add to free library</button>
+        </div>
+        <p class="hint" id="editHint"></p>
+      </div>
+
+      <div class="pane" id="pane-layers" hidden>
+        <div class="layers" id="layerList"></div>
+        <div class="tools-row">
+          <button class="ibtn" id="lAdd" title="New layer" aria-label="New layer" data-icon="plus"></button>
+          <button class="ibtn" id="lDup" title="Duplicate layer" aria-label="Duplicate layer" data-icon="copy"></button>
+          <button class="ibtn" id="lUp" title="Move layer up" aria-label="Move layer up" data-icon="up"></button>
+          <button class="ibtn" id="lDown" title="Move layer down" aria-label="Move layer down" data-icon="down"></button>
+          <button class="btn" id="lClear">Clear</button>
+          <button class="ibtn" id="lDel" title="Delete layer" aria-label="Delete layer" data-icon="trash"></button>
+        </div>
+        <div>
+          <h3 style="margin-bottom:6px">Layer name</h3>
+          <input type="text" id="layerName" maxlength="30" aria-label="Layer name">
+        </div>
+        <div id="layerSliderHost"></div>
+        <div>
+          <h3 style="margin-bottom:6px">Blend mode</h3>
+          <select id="blendSel" aria-label="Blend mode">
+            <option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option>
+            <option value="overlay">Overlay</option><option value="darken">Darken</option><option value="lighten">Lighten</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pane" id="pane-color" hidden>
+        <input type="color" class="colorbig" id="colorInput" aria-label="Pick a color" value="#222831">
+        <div class="inline"><input type="text" id="hexInput" maxlength="7" aria-label="Hex color" value="#222831"></div>
+        <h3>Swatches</h3>
+        <div class="palette" id="palette"></div>
+        <h3>Recent</h3>
+        <div class="palette" id="recent"></div>
+      </div>
+
+      <div class="pane" id="pane-text" hidden>
+        <textarea id="textStr" aria-label="Text to place" maxlength="300">Sketchroom</textarea>
+        <select id="fontSel" aria-label="Font"></select>
+        <div class="fontprev" id="fontPrev">The quick brown fox</div>
+        <div id="textSliderHost"></div>
+        <div class="seg" role="group" aria-label="Text style">
+          <button id="boldBtn" aria-pressed="false"><b>Bold</b></button>
+          <button id="italicBtn" aria-pressed="false"><i>Italic</i></button>
+        </div>
+        <p class="hint">Choose the Text tool, then tap the canvas to place it. It lands on the active layer in the current color.</p>
+        <div>
+          <h3 style="margin-bottom:6px">Add a free font</h3>
+          <div class="inline"><input type="text" id="fontAdd" placeholder="Name from fonts.google.com" maxlength="40" aria-label="Google Fonts family name"><button class="btn" id="fontAddBtn">Add</button></div>
+          <p class="hint" style="margin-top:6px">Fonts you add are saved to your account.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- Firebase (Google sign-in and the brush library). If these fail to load, the app keeps brushes in this browser instead. -->
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/core.js"></script>
+<script src="js/config.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/layers.js"></script>
+<script src="js/brushes.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/text.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/pad.js"></script>
+<script src="js/files.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
