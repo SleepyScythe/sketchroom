@@ -86,7 +86,8 @@ async function initStore() {
   // Suggestions for the free library: requests/{uid}_{brushId}. Admins add or decline them.
   store.requestShare = async function (item) {
     var u = auth.currentUser; if (!u) throw new Error('signed out');
-    await db.collection('requests').doc(u.uid + '_' + item.id).set({ name: item.name, params: item.params, at: Date.now(), by: u.uid, byName: (S.myName || '').slice(0, 80), brushId: item.id });
+    // byName is the Google display name only, never the email (S.myName falls back to the email for on-screen use).
+    await db.collection('requests').doc(u.uid + '_' + item.id).set({ name: item.name, params: item.params, at: Date.now(), by: u.uid, byName: (u.displayName || 'A tester').slice(0, 80), brushId: item.id });
   };
   // The drawing library. Items are kept in S.items by the listener below.
   store.createItem = async function (data) { var id = uid() + uid(); await home().collection('items').doc(id).set(data); return id; };

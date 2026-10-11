@@ -155,7 +155,14 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 - Painting limited to the inside of a selection (as in Procreate). Today a selection only moves or deletes pixels, and switching tools drops it.
 - Transform for a selection (scale and rotate), not just move.
 - Pixel art extras: tile preview (see a tile repeated), symmetry or mirror drawing, an indexed palette, exporting each tile as its own PNG.
-- Sharing an image or a project with another user (would need new Firestore and Storage rules).
+- **Next up (owner, 2026-10-11):**
+  - **Usernames:** everyone picks their own username, shown instead of their Google name.
+  - **Friends list:** friends can see each other's library, unless an item is set to private. This needs:
+    - a profile collection with unique usernames
+    - friend requests and acceptance
+    - a per-item `private` flag
+    - Firestore and Storage rules that let accepted friends read non-private items and layer files. Today the rules only allow the owner.
+- **Privacy rule:** never write a user's email into Firestore or anything other users can see. `requests.byName` uses the Google display name or "A tester". `S.myName` may fall back to the email, but only for the user's own screen.
 
 ## Testing
 
