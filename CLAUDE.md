@@ -87,7 +87,8 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 - Saving and loading a drawing as a file.
 - Import and export of brushes as JSON.
 - A color wheel / gradient picker in the Color tab (today it is the browser's `<input type="color">`, a hex field and swatches).
-- A canvas resizer: choose the canvas size for a new drawing and resize an existing one. `DOC_W` / `DOC_H` are constants today, and layers, the buffer, the overlay, undo crops and autosave all assume them.
+- Canvas size per drawing: the library's "Create new" button lets people pick their canvas size. The owner does not want a fixed size forever. `DOC_W` / `DOC_H` are constants today, and layers, the buffer, the overlay, undo crops and autosave all assume them, so they need to become per-document values.
+- Further off, if Sketchroom becomes an app: a pixel art mode with pixel tiles (a grid canvas), building on the existing layers.
 - More tools: fill, smudge, selection, shapes, layer merge.
 - Installable app mode (web app manifest and a service worker) for the iPad home screen.
 - Custom font upload (the claude.ai version only supports free Google Fonts by name).
