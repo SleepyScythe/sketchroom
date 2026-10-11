@@ -45,15 +45,16 @@ It was first built in Claude and published as a private artifact (https://claude
 
 ## Hosting and accounts
 
-- **Site:** GitHub Pages, served from the `main` branch, root folder, at `https://<github-user>.github.io/sketchroom/`. Pushing to `main` publishes the site within about a minute. The repo must stay public for free Pages.
-- **Accounts:** Firebase Authentication with Google sign-in only, on the free Spark plan. Anyone can draw and use the presets and free brushes without signing in. Saving a brush or adding a font asks them to sign in first: `signedIn()` in `app.js` opens the popup straight from the click, so iPad Safari allows it.
+- **Site:** GitHub Pages, served from the `main` branch, root folder, at https://sleepyscythe.github.io/sketchroom/ (repo https://github.com/SleepyScythe/sketchroom). Pushing to `main` publishes the site within about a minute. The repo must stay public for free Pages.
+- **Firebase project:** `sketchroom-abab3`, owned by the owner's Google account. Firestore is in `nam5` (United States). Google Analytics and Gemini are off. Console: https://console.firebase.google.com/project/sketchroom-abab3
+- **Accounts:** Firebase Authentication with Google sign-in only, on the free Spark plan. Testers see "Sketchroom" on the Google sign-in screen. Anyone can draw and use the presets and free brushes without signing in. Saving a brush or adding a font asks them to sign in first: `signedIn()` in `app.js` opens the popup straight from the click, so iPad Safari allows it.
 - **Data (Firestore):**
   - `brushes/{id}` and `fonts/{id}`: the free library. Everyone reads, admins write.
   - `users/{uid}/brushes/{id}` and `users/{uid}/fonts/{id}`: private to that user (My brushes, Your fonts).
   - `admins/{uid}`: marks an admin (`S.canEdit`). Admins see "Add to free library", can edit or delete free brushes, and the fonts they add go to the free list.
 - **Making someone an admin:** they sign in once. In Firebase console > Authentication > Users, copy their User UID. Then in Firestore > Data, start a collection `admins` (if it doesn't exist) and add a document whose ID is that UID, with any field (for example `note: "owner"`). The app can't write `admins`. Only the console can.
 - **Security rules** live in `firestore.rules`. After editing that file, paste it into Firebase console > Firestore Database > Rules and press Publish.
-- **Authorized domains:** sign-in only works on domains listed in Firebase console > Authentication > Settings > Authorized domains (`localhost` and `<github-user>.github.io`). A custom domain must be added there too.
+- **Authorized domains:** sign-in only works on domains listed in Firebase console > Authentication > Settings > Authorized domains (currently `localhost`, `sketchroom-abab3.firebaseapp.com`, `sketchroom-abab3.web.app` and `sleepyscythe.github.io`). A custom domain must be added there too.
 - **Fallback:** if `FIREBASE_CONFIG` is `null`, the SDK fails to load, or the page is opened from `file://`, then `store.online` is false. Sign in is hidden, the free library is hidden, and My brushes and fonts use `localStorage` (`sketchroom.brushes`, `sketchroom.fonts`).
 - **Drawings** are still saved only in the browser (IndexedDB). They are not in the cloud.
 
