@@ -82,7 +82,7 @@ function makeCard(id, name, params, c) {
   var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = name;
   var cv = document.createElement('canvas'); cv.width = 260; cv.height = 76;
   var by = document.createElement('span'); by.className = 'by';
-  by.textContent = !c ? 'Preset' : c.where === 'library' ? 'Free' : store.online ? 'Mine' : 'On this device';
+  by.textContent = !c || c.where === 'library' ? 'Free' : store.online ? 'Mine' : 'On this device';
   d.append(nm, cv, by);
   if (c) {
     if (canModify(c)) {
@@ -103,10 +103,10 @@ function makeCard(id, name, params, c) {
   return d;
 }
 function renderBrushes() {
-  var pg = $('#presetGrid'); pg.innerHTML = '';
-  PRESETS.forEach(function (p) { pg.appendChild(makeCard(p.id, p.name, p.p, null)); });
-  $('#librarySection').hidden = !store.online;
-  fillGrid($('#libraryGrid'), S.library, 'No free brushes yet.');
+  // Free brushes: the built-in presets, then any brushes an admin added to the free library.
+  var fg = $('#freeGrid'); fg.innerHTML = '';
+  PRESETS.forEach(function (p) { fg.appendChild(makeCard(p.id, p.name, p.p, null)); });
+  S.library.forEach(function (c) { fg.appendChild(makeCard(c.id, c.name, c.params, c)); });
   fillGrid($('#mineGrid'), S.mine, store.online && !S.myId ? 'Sign in to save your own brushes.' : 'No saved brushes yet. Open the Edit tab, shape a brush and press Save to my brushes.');
   markSelected(); updateEditorButtons();
 }

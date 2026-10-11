@@ -21,7 +21,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/config.js` | Preset brushes, brush settings schema, swatches, built-in font list, the app state object `S`, `toast()` |
 | `js/engine.js` | `makeTips()` (brush tip images) and `Engine` (stamps tips along a stroke), `drawPreview()` |
 | `js/layers.js` | Layer objects, add/duplicate/delete/clear/reorder, undo/redo history `H` |
-| `js/brushes.js` | `makeSlider()`, quick sliders, brush editor controls, brush library cards (Free brushes and My brushes grids) |
+| `js/brushes.js` | `makeSlider()`, quick sliders, brush editor controls, brush library cards. The Free brushes grid shows the built-in `PRESETS` followed by the Firestore free library. The other grid is My brushes |
 | `js/storage.js` | `store`: Google sign-in, the free library and each user's private brushes and fonts in Firestore, with a `localStorage` fallback. Also `renderAccount()` |
 | `js/text.js` | Google Font loading and the text tool (ghost preview, placing text on a layer) |
 | `js/canvas.js` | Pan and zoom, tool switching, color, pointer handling, strokes, eyedropper |

@@ -84,7 +84,6 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .pane[hidden] { display: none; }
 .pane h3 { margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
 .hint { color: var(--mute); font-size: 12px; margin: 0; }
-.section { display: flex; flex-direction: column; gap: 14px; }
 
 .row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
 .row label { color: var(--mute); font-size: 12px; }
