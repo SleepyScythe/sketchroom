@@ -86,7 +86,9 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 - A homepage with a library of the user's drawings and folders for multiple artworks. The app would then move off the root (for example to `draw.html`). Saving drawings to the cloud needs Firebase Storage, which requires upgrading to the pay-as-you-go Blaze plan (it has a free monthly allowance). Firestore documents are capped at 1 MB, too small for layer images.
 - Saving and loading a drawing as a file.
 - Import and export of brushes as JSON.
-- More tools: fill, smudge, selection, shapes, layer merge, canvas size choices.
+- A color wheel / gradient picker in the Color tab (today it is the browser's `<input type="color">`, a hex field and swatches).
+- A canvas resizer: choose the canvas size for a new drawing and resize an existing one. `DOC_W` / `DOC_H` are constants today, and layers, the buffer, the overlay, undo crops and autosave all assume them.
+- More tools: fill, smudge, selection, shapes, layer merge.
 - Installable app mode (web app manifest and a service worker) for the iPad home screen.
 - Custom font upload (the claude.ai version only supports free Google Fonts by name).
 
