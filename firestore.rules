@@ -15,6 +15,17 @@ service cloud.firestore {
         && d.params is map && d.params.size() <= 40
         && d.at is number;
     }
+    function validItem(d) {
+      return d.keys().hasOnly(['type', 'name', 'parent', 'created', 'updated', 'w', 'h', 'px', 'layers', 'active', 'count', 'thumb'])
+        && d.type in ['project', 'folder', 'image']
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.parent is string && d.parent.size() <= 40
+        && d.created is number && d.updated is number
+        && (!('layers' in d) || (d.layers is list && d.layers.size() <= 100))
+        && (!('thumb' in d) || (d.thumb is string && d.thumb.size() <= 120000))
+        && (!('w' in d) || (d.w is int && d.w >= 1 && d.w <= 4096))
+        && (!('h' in d) || (d.h is int && d.h >= 1 && d.h <= 4096));
+    }
     function validFont(d) {
       return d.keys().hasOnly(['family', 'at', 'by'])
         && d.family is string && d.family.size() >= 2 && d.family.size() <= 40
@@ -45,6 +56,11 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['colors', 'at'])
         && request.resource.data.colors is list && request.resource.data.colors.size() <= 60
         && request.resource.data.at is number;
+    }
+    // The library: projects, folders and images. An image's layer PNGs are in Cloud Storage (see storage.rules).
+    match /users/{uid}/items/{id} {
+      allow read, delete: if isUser(uid);
+      allow create, update: if isUser(uid) && validItem(request.resource.data);
     }
     match /users/{uid}/uploadedFonts/{id} {
       allow read, delete: if isUser(uid);

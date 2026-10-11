@@ -5,7 +5,8 @@
 /* ---------- layers ---------- */
 function makeLayer(name) {
   var c = document.createElement('canvas'); c.width = DOC_W; c.height = DOC_H;
-  return { id: uid(), name: name, canvas: c, ctx: c.getContext('2d'), visible: true, opacity: 1, blend: 'normal', locked: false };
+  // dirty: the pixels changed since the last upload to the library, so the next cloud save sends this layer.
+  return { id: uid(), name: name, canvas: c, ctx: c.getContext('2d'), visible: true, opacity: 1, blend: 'normal', locked: false, dirty: true };
 }
 function activeLayer() { return S.active; }
 // Every tool that changes pixels asks this first.
@@ -36,8 +37,9 @@ function updateHist() { $('#undoBtn').disabled = !H.undo.length; $('#redoBtn').d
 function undo() { abortStroke(); dropSelection(); var e = H.undo.pop(); if (!e) return; e.undo(); H.redo.push(e); updateHist(); scheduleSave(); }
 function redo() { abortStroke(); dropSelection(); var e = H.redo.pop(); if (!e) return; e.redo(); H.undo.push(e); updateHist(); scheduleSave(); }
 function crop(src, x, y, w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h); return c; }
-function restore(L, img, x, y) { L.ctx.globalCompositeOperation = 'source-over'; L.ctx.globalAlpha = 1; L.ctx.clearRect(x, y, img.width, img.height); L.ctx.drawImage(img, x, y); }
+function restore(L, img, x, y) { L.dirty = true; L.ctx.globalCompositeOperation = 'source-over'; L.ctx.globalAlpha = 1; L.ctx.clearRect(x, y, img.width, img.height); L.ctx.drawImage(img, x, y); }
 function recordCrop(L, snap, bb) {
+  L.dirty = true;
   var x = clamp(Math.floor(bb.x0), 0, DOC_W), y = clamp(Math.floor(bb.y0), 0, DOC_H);
   var w = clamp(Math.ceil(bb.x1), 0, DOC_W) - x, h = clamp(Math.ceil(bb.y1), 0, DOC_H) - y;
   if (w <= 0 || h <= 0) return;
@@ -64,8 +66,8 @@ function delLayer() {
 function clearLayer() {
   if (S.active.locked) { toast('This layer is locked. Unlock it to clear it.'); return; }
   var L = S.active, before = crop(L.canvas, 0, 0, DOC_W, DOC_H);
-  L.ctx.clearRect(0, 0, DOC_W, DOC_H);
-  pushHist({ undo: function () { restore(L, before, 0, 0); }, redo: function () { L.ctx.clearRect(0, 0, DOC_W, DOC_H); } });
+  L.ctx.clearRect(0, 0, DOC_W, DOC_H); L.dirty = true;
+  pushHist({ undo: function () { restore(L, before, 0, 0); }, redo: function () { L.ctx.clearRect(0, 0, DOC_W, DOC_H); L.dirty = true; } });
 }
 function moveLayer(dir) {
   var L = S.active, i = S.layers.indexOf(L), j = i + dir;
@@ -81,7 +83,7 @@ function mergeDown() {
   if (L.locked || B.locked) { toast('Unlock both layers to merge them.'); return; }
   var before = crop(B.canvas, 0, 0, DOC_W, DOC_H);
   B.ctx.globalAlpha = L.opacity; B.ctx.globalCompositeOperation = L.blend === 'normal' ? 'source-over' : L.blend;
-  B.ctx.drawImage(L.canvas, 0, 0);
+  B.ctx.drawImage(L.canvas, 0, 0); B.dirty = true;
   B.ctx.globalAlpha = 1; B.ctx.globalCompositeOperation = 'source-over';
   var after = crop(B.canvas, 0, 0, DOC_W, DOC_H);
   var apply = function () { restore(B, after, 0, 0); removeLayer(L); S.active = B; renderLayers(); };

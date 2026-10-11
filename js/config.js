@@ -35,6 +35,7 @@ var S = {
   tool: 'brush', color: '#222831', brush: P({}), base: P({}), brushId: 'pen', brushName: 'Technical Pen', dirty: false,
   eraser: P({ size: 26, hardness: 85, spacing: 6, smoothing: 20 }),
   layers: [], active: null, view: { x: 0, y: 0, s: 1 }, penSeen: false, fingerDraws: false, userZoomed: false,
+  doc: null, items: {}, itemsReady: false, homeAt: '', pxPen: { size: 1, opacity: 100 }, pxEraser: { size: 1, opacity: 100 },
   smudge: P({ size: 40, opacity: 60, hardness: 40 }), fill: { tolerance: 15, opacity: 100, allLayers: false },
   shape: { kind: 'rect', filled: false }, selKind: 'rect', sel: null,
   hsv: null, recent: [], saved: [], editColors: false, library: [], requests: [], myRequests: [], uploadedFonts: [], mine: [], sharedFonts: [], myFonts: [], myId: null, myName: '', canEdit: false,

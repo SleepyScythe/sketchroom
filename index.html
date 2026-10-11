@@ -17,13 +17,119 @@
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&family=Caveat&family=Permanent+Marker&family=Pacifico&family=Bebas+Neue&family=Playfair+Display&family=Lobster&family=Press+Start+2P&family=Special+Elite&family=Abril+Fatface&family=Cinzel&family=Shadows+Into+Light&family=Oswald&family=Indie+Flower&family=Dancing+Script&family=Righteous&family=Bangers&family=Amatic+SC&family=Rock+Salt&family=Satisfy&family=Anton&family=Archivo+Black&family=Monoton&family=Cormorant+Garamond&family=DM+Serif+Display&family=Syne&family=Space+Mono&display=swap">
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
-<div class="app">
+<div class="home" id="home" hidden>
   <header class="top">
-    <div class="brand"><span class="logo">Sketchroom</span><span class="savestate" id="saveState" aria-live="polite"></span></div>
-    <div class="top-actions">
+    <div class="brand"><span class="logo">Sketchroom</span></div>
+    <div class="top-actions" id="homeActions"></div>
+  </header>
+  <main class="homebody">
+    <section class="signedout" id="homeSignedOut" hidden>
+      <h1>Your drawings, in one place</h1>
+      <p id="signedOutText">Sign in with Google to keep your images, folders and projects in your account and open them on any device.</p>
+      <div class="tools-row">
+        <button class="btn primary" id="homeSignIn">Sign in with Google</button>
+        <button class="btn" id="homeSketch">Quick sketch</button>
+      </div>
+      <p class="hint">A quick sketch stays in this browser only.</p>
+    </section>
+    <section class="library" id="homeLibrary" hidden>
+      <div class="homebar">
+        <nav class="crumbs" id="crumbs" aria-label="Where you are"></nav>
+        <div class="menu-wrap">
+          <button class="btn primary" id="createBtn" aria-haspopup="true" aria-expanded="false">Create new</button>
+          <div class="menu" id="createMenu" hidden>
+            <button id="newImage">Image</button>
+            <button id="newFolder">Folder</button>
+            <button id="newProject">Project</button>
+            <button id="newImport">Import a file</button>
+          </div>
+          <input type="file" id="importInput" accept=".json,application/json,image/*" hidden>
+        </div>
+      </div>
+      <div class="sketchbanner" id="sketchBanner" hidden>
+        <span>You have a quick sketch saved in this browser.</span>
+        <button class="btn sm primary" id="sketchToLibrary">Add it to the library</button>
+        <button class="btn sm" id="sketchOpen">Open it</button>
+      </div>
+      <div class="hgrid" id="homeGrid"></div>
+      <p class="homeempty" id="homeEmpty" hidden></p>
+    </section>
+    <p class="homeempty" id="homeLoading" hidden>Loading your library…</p>
+  </main>
+  <div class="menu cardmenu" id="cardMenu" hidden>
+    <button id="cmOpen">Open</button>
+    <button id="cmRename">Rename</button>
+    <button id="cmMove">Move to…</button>
+    <button id="cmDuplicate">Duplicate</button>
+    <button id="cmDelete">Delete</button>
+  </div>
+</div>
+
+<dialog class="dlg" id="dlgImage" aria-labelledby="dlgImageTitle">
+  <form method="dialog" id="formImage">
+    <h2 id="dlgImageTitle">New image</h2>
+    <label class="field">Name<input type="text" id="imgName" maxlength="60" value="Untitled"></label>
+    <label class="check"><input type="checkbox" id="imgPixel"> Pixel art tileset</label>
+    <div id="imgSizeBox">
+      <label class="field">Canvas size
+        <select id="imgPreset">
+          <option value="1600x1200">Standard, 1600 × 1200</option>
+          <option value="2048x2048">Square, 2048 × 2048</option>
+          <option value="1024x1024">Small square, 1024 × 1024</option>
+          <option value="1920x1080">Wide screen, 1920 × 1080</option>
+          <option value="1080x1920">Phone, 1080 × 1920</option>
+          <option value="1240x1754">A4 page, 1240 × 1754</option>
+          <option value="custom">Custom size</option>
+        </select>
+      </label>
+      <div class="inline" id="imgCustom" hidden>
+        <label class="field">Width<input type="number" id="imgW" min="16" max="4096" value="1600"></label>
+        <label class="field">Height<input type="number" id="imgH" min="16" max="4096" value="1200"></label>
+      </div>
+    </div>
+    <div id="imgPixelBox" hidden>
+      <label class="field">Tile size
+        <select id="imgTile">
+          <option value="8">8 × 8 pixels</option><option value="16" selected>16 × 16 pixels</option><option value="24">24 × 24 pixels</option>
+          <option value="32">32 × 32 pixels</option><option value="48">48 × 48 pixels</option><option value="64">64 × 64 pixels</option>
+        </select>
+      </label>
+      <div class="inline">
+        <label class="field">Tiles across<input type="number" id="imgCols" min="1" max="64" value="8"></label>
+        <label class="field">Tiles down<input type="number" id="imgRows" min="1" max="64" value="8"></label>
+      </div>
+    </div>
+    <p class="hint" id="imgSummary"></p>
+    <div class="tools-row dlgbtns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="ok" id="imgCreate">Create</button></div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="dlgName" aria-labelledby="dlgNameTitle">
+  <form method="dialog" id="formName">
+    <h2 id="dlgNameTitle">New folder</h2>
+    <label class="field">Name<input type="text" id="nameInput" maxlength="60" required></label>
+    <div class="tools-row dlgbtns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="ok" id="nameOk">Create</button></div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="dlgMove" aria-labelledby="dlgMoveTitle">
+  <form method="dialog" id="formMove">
+    <h2 id="dlgMoveTitle">Move to</h2>
+    <div class="movelist" id="moveList" role="radiogroup" aria-label="Where to move it"></div>
+    <div class="tools-row dlgbtns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="ok">Move</button></div>
+  </form>
+</dialog>
+
+<div class="app" id="editor" hidden>
+  <header class="top">
+    <div class="brand">
+      <button class="ibtn" id="homeBtn" title="Back to the library" aria-label="Back to the library" data-icon="library"></button>
+      <span class="doctitle" id="docTitle">Sketchroom</span><span class="savestate" id="saveState" aria-live="polite"></span>
+    </div>
+    <div class="top-actions" id="editorActions">
       <button class="ibtn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo" data-icon="undo" disabled></button>
       <button class="ibtn" id="redoBtn" title="Redo (Shift+Ctrl+Z)" aria-label="Redo" data-icon="redo" disabled></button>
       <span class="sep zoomgroup"></span>
@@ -37,9 +143,10 @@
         <div class="menu" id="fileMenu" hidden>
           <button id="exportPng">Export PNG</button>
           <button id="exportPngT">Export PNG, transparent background</button>
+          <button id="exportPngBig" hidden>Export PNG, 8× bigger (pixel art)</button>
           <button id="saveFile">Save drawing file</button>
           <button id="openFile">Open drawing file</button>
-          <button id="newDoc">New drawing</button>
+          <button id="newDoc">Clear drawing</button>
         </div>
         <input type="file" id="openFileInput" accept=".json,application/json" hidden>
       </div>
@@ -70,7 +177,9 @@
 
     <section class="viewport" id="vp" aria-label="Drawing canvas">
       <div id="stage"></div>
+      <canvas id="grid" aria-hidden="true"></canvas>
       <div id="ring" hidden></div>
+      <div class="loading" id="docLoading" hidden>Opening…</div>
       <div id="toast" role="status"></div>
     </section>
 
@@ -106,6 +215,7 @@
       </div>
 
       <div class="pane" id="pane-brushes">
+        <p class="hint pixelonly">This is a pixel art image. The brush, line and shapes draw crisp square pixels at the size you set above, so the brush styles below only apply to regular images.</p>
         <div class="section" id="requestSection" hidden>
           <h3>Suggested for the free library</h3>
           <div class="bgrid" id="requestGrid"></div>
@@ -236,21 +346,25 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=5"></script>
-<script src="js/core.js?v=5"></script>
-<script src="js/config.js?v=5"></script>
-<script src="js/engine.js?v=5"></script>
-<script src="js/layers.js?v=5"></script>
-<script src="js/brushes.js?v=5"></script>
-<script src="js/storage.js?v=5"></script>
-<script src="js/text.js?v=5"></script>
-<script src="js/canvas.js?v=5"></script>
-<script src="js/color.js?v=5"></script>
-<script src="js/tools.js?v=5"></script>
-<script src="js/select.js?v=5"></script>
-<script src="js/pad.js?v=5"></script>
-<script src="js/files.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/firebase-config.js?v=6"></script>
+<script src="js/core.js?v=6"></script>
+<script src="js/config.js?v=6"></script>
+<script src="js/engine.js?v=6"></script>
+<script src="js/layers.js?v=6"></script>
+<script src="js/brushes.js?v=6"></script>
+<script src="js/storage.js?v=6"></script>
+<script src="js/text.js?v=6"></script>
+<script src="js/canvas.js?v=6"></script>
+<script src="js/color.js?v=6"></script>
+<script src="js/tools.js?v=6"></script>
+<script src="js/select.js?v=6"></script>
+<script src="js/pixel.js?v=6"></script>
+<script src="js/pad.js?v=6"></script>
+<script src="js/files.js?v=6"></script>
+<script src="js/document.js?v=6"></script>
+<script src="js/library.js?v=6"></script>
+<script src="js/app.js?v=6"></script>
 </body>
 </html>

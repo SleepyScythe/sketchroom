@@ -18,7 +18,10 @@ function makeSlider(label, min, max, unit, get, set, log) {
   wrap.append(l, o, i); wrap.sync(); return wrap;
 }
 var quickSliders = [], editSliders = [];
-function curParams() { return S.tool === 'eraser' ? S.eraser : S.tool === 'smudge' ? S.smudge : S.brush; }
+function curParams() {
+  if (isPixel() && S.tool !== 'smudge') return S.tool === 'eraser' ? S.pxEraser : S.pxPen;
+  return S.tool === 'eraser' ? S.eraser : S.tool === 'smudge' ? S.smudge : S.brush;
+}
 function buildSliders() {
   var q = $('#qPaint');
   [['size', 'Size', 1, 300, 'px', true], ['opacity', 'Opacity', 1, 100, '%']].forEach(function (d) {

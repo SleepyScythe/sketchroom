@@ -1,6 +1,8 @@
 # Sketchroom
 
 A Procreate-style drawing web app for the owner and beta testers. It has:
+- a homepage library of images, folders and projects, saved in each user's account
+- a chosen canvas size for each image, and pixel-art tilesets with crisp pixel tools
 - pressure-aware brushes and a brush editor
 - smudge, fill, line, shapes, and select & move
 - layers with lock, merge and image import for tracing
@@ -9,7 +11,7 @@ A Procreate-style drawing web app for the owner and beta testers. It has:
 - undo/redo, PNG export and drawing files
 - install to the iPad home screen.
 
- Plain HTML, CSS and JavaScript. No build step and no npm. Firebase is loaded from gstatic with `<script>` tags. It is hosted on GitHub Pages (see "Hosting and accounts").
+Plain HTML, CSS and JavaScript. No build step and no npm. Firebase is loaded from gstatic with `<script>` tags. It is hosted on GitHub Pages (see "Hosting and accounts").
 
 ## Where it came from
 
@@ -23,109 +25,172 @@ It was first built in Claude and published as a private artifact (https://claude
 
 | File | What it holds |
 | --- | --- |
-| `index.html` | Page markup: top bar (with the account button), tool rail, canvas area, tabbed dock (Brushes, Edit, Layers, Color, Text) |
+| `index.html` | Two views: `#home` (the library) and `#editor` (top bar, tool rail, canvas, tabbed dock), plus the New image / name / Move dialogs (`<dialog>`) |
 | `styles.css` | All styling, dark and light themes through CSS variables at the top |
 | `js/firebase-config.js` | `FIREBASE_CONFIG`, the public web config from the Firebase console. `null` means "no Firebase" |
-| `js/core.js` | Document size constants, `$` / `$$` helpers, SVG icons |
+| `js/core.js` | `DOC_W` / `DOC_H` (the open image's size, changed by `setDocSize()`), `$` / `$$` helpers, SVG icons |
 | `js/config.js` | Preset brushes, brush settings schema, swatches, built-in font list, the app state object `S`, `toast()` |
 | `js/engine.js` | `makeTips()` (brush tip images) and `Engine` (stamps tips along a stroke), `drawPreview()` |
 | `js/layers.js` | Layer objects, add/duplicate/delete/clear/reorder, lock (`toggleLock`), `mergeDown()`, `importImage()`, `canDraw(L)`, undo/redo history `H` |
-| `js/brushes.js` | `makeSlider()`, quick sliders, brush editor controls, brush library cards. The Free brushes grid shows the built-in `PRESETS` followed by the Firestore free library. The other grid is My brushes. Also the owner's "Suggested for the free library" cards (`renderRequests()`), and brush file import/export (`cleanParams()`) |
-| `js/storage.js` | `store`: Google sign-in, the free library, each user's private brushes, fonts, saved colors and uploaded font files, and brush suggestions, all in Firestore, with a `localStorage` fallback. Also `renderAccount()` |
-| `js/text.js` | Google Font loading, uploaded font files (`uploadFont()`, `registerUploadedFont()`), and the text tool (ghost preview, placing text on a layer) |
-| `js/canvas.js` | Pan and zoom, tool switching, pointer handling, brush and eraser strokes, eyedropper. `onDown` sends the other tools to `tools.js` / `select.js`. Those set `drag = { id, move, end, cancel }` |
+| `js/brushes.js` | `makeSlider()`, quick sliders, `curParams()`, brush editor controls, brush library cards (Free brushes = `PRESETS` + the Firestore free library, then My brushes), the owner's suggestion cards (`renderRequests()`), brush file import/export |
+| `js/storage.js` | `store`: Google sign-in, and everything kept in accounts (free library, private brushes, fonts, saved colors, uploaded fonts, suggestions, library items, layer files in Cloud Storage), with a `localStorage` fallback. `store.ready` resolves once the first sign-in state is known. Also `renderAccount()` |
+| `js/text.js` | Google Font loading, uploaded font files (`uploadFont()`, `registerUploadedFont()`), the text tool |
+| `js/canvas.js` | Pan and zoom (`maxZoom()`), tool switching, pointer handling, brush and eraser strokes, eyedropper. `onDown` sends the other tools to `tools.js` / `select.js` / `pixel.js`, which set `drag = { id, move, end, cancel }` |
+| `js/color.js` | `setColor()`, the color wheel, saved and recent colors, the quick color pop-up |
 | `js/tools.js` | The quick settings at the top of the dock (`updateQuick()`, `quickTitle()`), fill (`fillAt`), line and shapes (`beginShape`), smudge (`beginSmudge`) |
 | `js/select.js` | Selection (rectangle or freehand) and moving the selected pixels (`S.sel`, `dropSelection()`, `deleteSelection()`) |
-| `js/color.js` | `setColor()`, the color wheel (`makeWheel()`: a hue ring around a saturation/brightness square), saved and recent colors, and the quick color pop-up that opens from the color circle on the tool rail. `initColor()` runs from `init()` |
+| `js/pixel.js` | Pixel art: `isPixel()`, the pixel pencil and eraser (`beginPixelStroke`), pixel line and shapes (`drawPixelShape`), the pixel/tile grid (`drawGrid`), hard-edged selection masks (`hardMask`) |
 | `js/pad.js` | The test pad in the Edit tab and its pressure readout |
-| `js/files.js` | Autosave to IndexedDB, `downloadBlob()`, PNG export, drawing files (`.sketchroom.json`: save and open), "New drawing" |
+| `js/files.js` | Saving the open image in IndexedDB (`saveDoc`, `idbGet/Put/Del`), `downloadBlob()`, PNG export (with a scale for pixel art), drawing files (`.sketchroom.json`), "Clear drawing" (`newDoc`) |
+| `js/document.js` | The open image (`S.doc`): `setDocSize()`, `applyDocMode()`, `useLayers()`, opening the quick sketch or a library image (`openSketch`, `openImage`), cloud saving (`cloudSave`, `leaveDoc`), thumbnails |
+| `js/library.js` | The homepage: cards, breadcrumbs, Create new (Image / Folder / Project / Import a file), Open / Rename / Move to… / Duplicate / Delete, the quick sketch banner, and the page addresses (`route()`) |
 | `js/app.js` | Event wiring (`wire()`), tabs, keyboard shortcuts, and `init()`. Must load last |
-| `firestore.rules` | Firestore security rules. Not deployed automatically: paste into the Firebase console when changed |
+| `firestore.rules`, `storage.rules` | Security rules for Firestore and Cloud Storage. Not deployed automatically: paste into the Firebase console when changed |
 | `tools/serve.ps1` | Tiny static server on http://localhost:8000 for local testing (`.claude/launch.json` runs it) |
 | `favicon.svg`, `.nojekyll`, `.gitignore` | Site icon. `.nojekyll` tells GitHub Pages to serve files as they are |
-| `manifest.webmanifest`, `sw.js`, `icons/` | Installable app. The manifest and the `apple-*` meta tags let it go on the home screen. `sw.js` is a network-first service worker, so it opens offline but never serves stale files when online. The PNG icons were drawn with System.Drawing from the favicon's curve |
+| `manifest.webmanifest`, `sw.js`, `icons/` | Installable app. `sw.js` is a network-first service worker, so it opens offline but never serves stale files when online. The PNG icons were drawn with System.Drawing from the favicon's curve |
 
 ## How it works
 
-- The document is 1600 x 1200 (`DOC_W`, `DOC_H`). Each layer is its own `<canvas>` inside `#stage`. Zoom and pan are a CSS transform on `#stage` (`S.view`), so drawing coordinates are converted with `docPos()`.
-- Brush settings live in one object (keys in `BASE` and `SCHEMA` in `config.js`): size, opacity, flow, hardness, spacing, roundness, angle, angleJitter, scatter, sizeJitter, pressureSize, pressureOpacity, smoothing, shape (`round`, `square`, `chalk`, `bristle`, `speckle`), follow. Saved brushes are `{ name, params, at }`, plus `by` (the admin's uid) in the free library. In the app each one also carries `where`: `'library'` or `'mine'`.
-- A stroke: `Engine` stamps a pre-rendered tip along the path at `spacing`. Normal brushes draw into a separate `buffer` canvas shown above the active layer at the brush's opacity, then composite onto the layer when the pen lifts, so opacity does not build up within one stroke. The eraser draws straight onto the layer with `destination-out`.
-- `Engine.stamp()` spreads the target alpha across the stamps that overlap each pixel (`this.norm`, for round, square and chalk tips). Without that, overlapping stamps pile up to solid and Flow or pen pressure has no visible effect.
-- Undo: each stroke stores small before/after crops of its bounding box. Layer operations store closures. History is capped at 80 entries.
+- **Pages** (`route()` in `library.js`, driven by the URL hash):
+  - `#/` is the library's top level. `#/c/<id>` is inside a project or folder.
+  - `#/d/<id>` opens an image in the editor. `#/sketch` opens the quick sketch.
+  - Leaving an image always goes through `leaveDoc()`, which saves first.
+  - The library needs sign-in. Signed out, the homepage offers Sign in and Quick sketch. The quick sketch is one drawing kept only in the browser, under IndexedDB key `current` (the same key the single-drawing app used before the library existed).
+- **Library items** (`users/{uid}/items/{id}`): `{ type: 'project' | 'folder' | 'image', name, parent ('' = top level), created, updated }`.
+  - Images add `w`, `h`, `px` (pixel art `{ tile, cols, rows }` or null), `layers` (`[{ id, name, visible, opacity, blend, locked }]`), `active`, `count` and `thumb` (a small data URL for the card).
+  - The owner chose flexible nesting: projects hold folders and images, folders hold images, and anything can sit at the top level. Folders can't hold folders, and projects only sit at the top level.
+  - Deleting a project or folder deletes everything inside it, Storage files included.
+- **Each layer's pixels** are a PNG in Cloud Storage at `users/{uid}/images/{imageId}/{layerId}.png`.
+- **Saving an image:**
+  - Every change is written to IndexedDB (`img:<id>`) about 2.5 s later.
+  - `cloudSave()` then uploads only layers with `L.dirty` set. `recordCrop`, `restore`, clear, merge and new layers set it.
+  - Files of removed layers are deleted, and the item's meta and thumbnail are updated. Once everything is up, the IndexedDB copy is deleted.
+  - When an image opens, an unsynced IndexedDB copy that is newer than the cloud wins, so offline work isn't lost.
+  - **Safety:** while an image is loading (`S.doc.loading`) or failed to load (`S.doc.broken`), the canvas only holds a blank placeholder. Nothing saves, and drawing is blocked. Before this guard existed, a failed load followed by leaving the image overwrote the cloud copy with a blank layer (found in testing on 2026-10-11).
+- **Canvas size:** `DOC_W` / `DOC_H` change per image through `setDocSize()`, which also resizes the stroke `buffer`, the `overlay` and `#stage`. Layers must be rebuilt after it (`makeLayer` uses the current size).
+  - Regular images go up to 4096 per side.
+  - Pixel art goes up to 2048 per side: tile size × tiles across and down, tiles 8–64 px, 1–64 tiles each way.
+- **Pixel art** (`S.doc.px` set, `isPixel()`):
+  - Display: `#stage` gets the `pixel` class (pixelated rendering, checkerboard), and the body gets `pixeldoc`, which hides Smudge and shows the Brushes tab note.
+  - Tools: brush, eraser, line and shapes draw whole pixels. Sizes come from `S.pxPen` / `S.pxEraser` through `curParams()`.
+  - Fill has no soft ring, and selections use hard masks.
+  - `#grid` is a screen-sized canvas over the viewport that draws tile lines, plus pixel lines from 8× zoom, redrawn on every `applyView()`.
+  - Zoom goes up to 64×. File > Export PNG, 8× bigger scales up with hard edges.
+- The document is in document pixels. Each layer is its own `<canvas>` inside `#stage`. Zoom and pan are a CSS transform on `#stage` (`S.view`), so drawing coordinates are converted with `docPos()`.
+- Brush settings live in one object (keys in `BASE` and `SCHEMA` in `config.js`). Saved brushes are `{ name, params, at }`, plus `by` (the admin's uid) in the free library, and each carries `where` (`'library'` or `'mine'`) in the app.
+- A stroke: `Engine` stamps a pre-rendered tip along the path at `spacing`. Brushes draw into the separate `buffer` canvas shown above the active layer at the brush's opacity, then composite onto the layer when the pen lifts. The eraser draws straight onto the layer with `destination-out`. `Engine.stamp()` spreads alpha across overlapping stamps (`this.norm`), so Flow and pen pressure show.
+- Undo: each stroke stores before/after crops of its bounding box, and layer operations store closures. History is capped at 80 entries and resets when another image opens.
 - Touch: once a pen has been seen, one finger pans and two fingers pinch-zoom. Before that, a finger draws.
-- Autosave: layers are written to IndexedDB (`sketchroom` database, `doc` store, key `current`) about 2.5 seconds after a change. This is per browser and per origin.
-- Shortcuts: B brush, E eraser, S smudge, G fill, L line, U shapes, M select, T text, I eyedropper, H or hold Space to pan, [ and ] change size, Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z redo. Esc closes the color pop-up, Esc or Enter drops a selection, and Delete clears the selected pixels.
-- **Tools and the quick panel:** the top of the dock shows settings for the current tool. `#qPaint` holds Size and Opacity, and its Opacity slider is relabeled "Strength" for smudge. `#qFill`, `#qShape` and `#qSelect` belong to their tools. `curParams()` is `S.eraser`, `S.smudge` or `S.brush`.
-  - **Lock:** `L.locked` stops every tool, Clear and Merge. All of them call `canDraw(L)`. It is saved in autosave and drawing files.
-  - **Fill:** a scanline flood fill on the active layer (or on all visible layers with the checkbox), with a Tolerance setting. Colors are compared premultiplied. The filled area is painted normally, plus a 2px ring painted with `destination-over`, so it tucks under antialiased line edges without a halo.
-  - **Line and Shapes:** use the current brush with smoothing forced to 0. They preview in `buffer` and land as one undo step. Shapes can be a rectangle or ellipse, outline or filled. Shift snaps lines to 15 degree steps and makes shapes square or round.
-  - **Smudge:** carries a patch of the layer along the stroke (`S.smudge`: size, opacity as strength, hardness). Pen pressure scales the strength.
-  - **Select & move:** rectangle or freehand. Dragging inside lifts the pixels into a floating canvas drawn on `overlay`. They land on the layer as one undo step when the selection is dropped: another tool, another layer, a layer button, undo, Deselect, a new selection, or autosave.
-  - **Import image:** goes under the active layer, scaled to fit, locked, at 40% opacity, as one undo step.
-- **Color:** `S.color` is the hex in use, and `S.hsv` keeps hue and saturation so they survive at black, white and greys. Always change color through `setColor(hex, remember, hsv)`, which redraws both wheels (Color tab and pop-up) and every swatch. `remember` adds the color to Recent.
-  - **Saved colors** (`S.saved`, max 60) start as `SWATCHES`. The + button adds the current color, and the pencil toggles remove mode. They are stored in `users/{uid}/settings/colors` when signed in, or in `localStorage` `sketchroom.colors` when signed out. On a user's first sign-in, the browser's list seeds the account doc. After that, the account doc wins.
-  - **Recent** (12) is per browser, in `sketchroom.recent`.
-  - **The pop-up** opens from `#colorChip`, which sits on the tool rail just under the hand (grab) tool. It stays open while you draw on the canvas, so you can switch colors between strokes. The chip, its × button, Esc, or a tap anywhere else in the interface (tabs, top bar, dock) closes it. The owner asked for this behavior.
+- Shortcuts: B brush, E eraser, S smudge, G fill, L line, U shapes, M select, T text, I eyedropper, H or hold Space to pan, [ and ] change size, Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z redo. Esc closes the color pop-up. Esc or Enter drops a selection, and Delete clears the selected pixels.
+- **Tools and the quick panel:** the top of the dock shows the current tool's settings. `#qPaint` holds Size and Opacity, relabeled "Strength" for smudge. `#qFill`, `#qShape` and `#qSelect` belong to their tools.
+  - **Lock:** `L.locked` stops every tool, Clear and Merge, all through `canDraw(L)`.
+  - **Fill:** a scanline flood fill on the active layer (or all visible layers), with a Tolerance setting and premultiplied color comparison. It adds a 2px ring painted with `destination-over`, so it tucks under antialiased edges (no ring for pixel art).
+  - **Line and Shapes:** use the current brush with smoothing 0, preview in `buffer`, and land as one undo step. Shift snaps lines to 15° steps and makes shapes square or round.
+  - **Smudge:** carries a patch of the layer along the stroke (`S.smudge`: size, opacity as strength, hardness).
+  - **Select & move:** dragging inside a selection lifts the pixels into a floating canvas on `overlay`. They land as one undo step when the selection is dropped: another tool, layer, layer button, undo, Deselect, new selection, autosave or cloud save.
+  - **Import image** (Layers tab): goes under the active layer, scaled to fit, locked, at 40% opacity.
+- **Color:** always change color through `setColor(hex, remember, hsv)`. `S.hsv` keeps hue and saturation at black, white and greys.
+  - Saved colors (`S.saved`, max 60) live in `users/{uid}/settings/colors` when signed in, or in `localStorage` when signed out.
+  - Recent is per browser.
+  - The color pop-up opens from `#colorChip` under the hand tool. It stays open while drawing (the owner asked for this) and closes from the chip, ×, Esc, or a tap elsewhere in the interface.
 
 ## Hosting and accounts
 
 - **Site:** GitHub Pages, served from the `main` branch, root folder, at https://sleepyscythe.github.io/sketchroom/ (repo https://github.com/SleepyScythe/sketchroom). Pushing to `main` publishes the site within about a minute. The repo must stay public for free Pages.
-- **Firebase project:** `sketchroom-abab3`, owned by the owner's Google account. Firestore is in `nam5` (United States). Google Analytics and Gemini are off. Console: https://console.firebase.google.com/project/sketchroom-abab3
-- **Accounts:** Firebase Authentication with Google sign-in only, on the free Spark plan. Testers see "Sketchroom" on the Google sign-in screen. Anyone can draw and use the presets and free brushes without signing in. Saving a brush or adding a font asks them to sign in first: `signedIn()` in `app.js` opens the popup straight from the click, so iPad Safari allows it.
+- **Firebase project:** `sketchroom-abab3`, owned by the owner's Google account. Console: https://console.firebase.google.com/project/sketchroom-abab3
+  - **Plan:** Blaze (pay as you go) since 2026-10-11. The owner set a $5 budget alert themselves.
+  - **Firestore:** in `nam5`. Google Analytics and Gemini are off.
+  - **Cloud Storage:** default bucket `gs://sketchroom-abab3.firebasestorage.app` in US-EAST1, a no-cost location, so the free allowance applies. Its **CORS** allows GET from `https://sleepyscythe.github.io` and `http://localhost:8000`. It was set from Google Cloud Shell:
+    ```
+    gcloud storage buckets update gs://sketchroom-abab3.firebasestorage.app --cors-file=cors.json
+    ```
+    Without CORS, opening a library image fails with a CORS error, because the browser can't download the layer PNGs. A custom domain must be added to the CORS list (and to the Authorized domains).
+- **Accounts:** Firebase Authentication with Google sign-in only. Testers see "Sketchroom" on the Google sign-in screen. `signedIn()` in `app.js` opens the popup straight from the click, so iPad Safari allows it.
 - **Data (Firestore):**
   - `brushes/{id}` and `fonts/{id}`: the free library. Everyone reads, admins write.
-  - `users/{uid}/brushes/{id}` and `users/{uid}/fonts/{id}`: private to that user (My brushes, Your fonts).
-  - `users/{uid}/settings/colors`: that user's saved colors `{ colors: [...hex], at }`.
-  - `users/{uid}/uploadedFonts/{id}`: uploaded font files `{ family, data (base64), at }`. The file limit is 700 KB, which keeps each document under Firestore's 1 MB cap. They are registered with `FontFace` on sign-in.
-  - `requests/{uid}_{brushId}`: a tester's suggestion for the free library `{ name, params, at, by, byName, brushId }`. The tester and admins can read it. Admins see the suggestions in the Brushes tab and can Add (which copies the brush to `brushes` and deletes the request) or Decline.
-  - `admins/{uid}`: marks an admin (`S.canEdit`). Admins see "Add to free library", can edit or delete free brushes, and the fonts they add go to the free list.
-- **Making someone an admin:** they sign in once. In Firebase console > Authentication > Users, copy their User UID. Then in Firestore > Data, start a collection `admins` (if it doesn't exist) and add a document whose ID is that UID, with any field (for example `note: "owner"`). The app can't write `admins`. Only the console can.
-- **Security rules** live in `firestore.rules`. After editing that file, paste it into Firebase console > Firestore Database > Rules and press Publish.
-- **Authorized domains:** sign-in only works on domains listed in Firebase console > Authentication > Settings > Authorized domains (currently `localhost`, `sketchroom-abab3.firebaseapp.com`, `sketchroom-abab3.web.app` and `sleepyscythe.github.io`). A custom domain must be added there too.
-- **Fallback:** if `FIREBASE_CONFIG` is `null`, the SDK fails to load, or the page is opened from `file://`, then `store.online` is false. Sign in is hidden, the free library is hidden, and My brushes and fonts use `localStorage` (`sketchroom.brushes`, `sketchroom.fonts`).
-- **Drawings** are still saved only in the browser (IndexedDB). They are not in the cloud. File > Save drawing file / Open drawing file moves them between devices.
-- **Home-screen app (iPad):** Safari's Share menu has Add to Home Screen. On iOS the home-screen app has its own storage, separate from Safari, so drawings, Recent colors and sign-in do not carry over. Google sign-in from inside the home-screen app has not been tested. Firebase's popup flow can fail in iOS standalone mode. If it does, the fallback is to sign in from Safari, or to set `display` to `browser` in the manifest.
+  - `users/{uid}/brushes`, `users/{uid}/fonts`: My brushes and Your fonts.
+  - `users/{uid}/settings/colors`: saved colors.
+  - `users/{uid}/uploadedFonts/{id}`: uploaded font files `{ family, data (base64), at }`, 700 KB max.
+  - `users/{uid}/items/{id}`: the library (see "How it works").
+  - `requests/{uid}_{brushId}`: a tester's suggestion for the free library. Admins Add or Decline it in the Brushes tab.
+  - `admins/{uid}`: marks an admin (`S.canEdit`).
+- **Making someone an admin:** they sign in once. In Firebase console > Authentication > Users, copy their User UID. In Firestore > Data, add a document with that UID as its ID to the `admins` collection, with any field (for example `note: "owner"`). Only the console can write `admins`.
+- **Security rules:** `firestore.rules` and `storage.rules`. After editing one, paste it into Firebase console > Firestore Database > Rules (or Storage > Rules) and press Publish.
+- **Authorized domains:** sign-in only works on domains listed in Authentication > Settings > Authorized domains (`localhost`, `sketchroom-abab3.firebaseapp.com`, `sketchroom-abab3.web.app`, `sleepyscythe.github.io`).
+- **Fallback:** if `FIREBASE_CONFIG` is `null`, the SDK fails to load, or the page is opened from `file://`, then `store.online` is false. The homepage then offers only the quick sketch, and brushes and fonts use `localStorage`.
+- **Home-screen app (iPad):** Safari's Share menu has Add to Home Screen. On iOS the home-screen app has its own storage, separate from Safari, so the quick sketch, Recent colors and sign-in don't carry over. Library images are in the account, so they do once signed in. Google sign-in from inside the home-screen app has not been tested. Firebase's popup flow can fail in iOS standalone mode. If it does, the fallback is to sign in from Safari, or to set `display` to `browser` in the manifest.
 
 ## Running locally
 
-Run `tools/serve.ps1` (or start the `sketchroom` entry in `.claude/launch.json`) and open http://localhost:8000. Google sign-in needs `http://localhost`. Opening `index.html` from disk still works but uses the local fallback. Python and Node.js are not installed on the owner's PC and are not needed.
+Run `tools/serve.ps1` (or start the `sketchroom` entry in `.claude/launch.json`) and open http://localhost:8000. Google sign-in and library images work on `http://localhost:8000` (it is an authorized domain and in the bucket's CORS list). Opening `index.html` from disk still works but uses the local fallback. Python and Node.js are not installed on the owner's PC and are not needed.
+
+When testing in the built-in browser, **navigating to the same URL with a different `#` does not reload the page**, so the old scripts keep running. Use `location.reload()` after editing JS.
 
 ## Deploying
 
-Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` number** on `styles.css` and every `js/` script tag in `index.html` before each push that changes CSS or JS. GitHub Pages lets browsers cache files for 10 minutes (`max-age=600`), and a normal reload refetches `index.html` but reuses cached scripts. Without the bump, a visitor can get the new page with old scripts, startup throws, and the page shows no brushes and no Sign in button (this happened on 2026-10-11). Git push works from Claude's shell (credentials are cached in Git Credential Manager). The Firebase compat SDK version is pinned in `index.html` (currently 12.19.0). When upgrading it, change all three script tags together.
+Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` number** on `styles.css` and every `js/` script tag in `index.html` before each push that changes CSS or JS.
+- **Why:** GitHub Pages lets browsers cache files for 10 minutes (`max-age=600`), and a normal reload refetches `index.html` but reuses cached scripts. Without the bump, a visitor can get the new page with old scripts, startup throws, and the page looks dead (this happened on 2026-10-11).
+- **Pushing:** git push works from Claude's shell (credentials are cached in Git Credential Manager).
+- **Firebase SDK:** the compat SDK version is pinned in `index.html` (currently 12.19.0). Change all four script tags (app, auth, firestore, storage) together.
 
 ## Conventions
 
 - No build tools, no ES modules (browsers block modules on `file://`). If modules are wanted later, add a small dev server first.
 - Keep new scripts in `js/` and list them in `index.html`. Keep `app.js` last.
-- Put user-visible text in the element with `textContent`, never `innerHTML`, when it comes from users (brush names, layer names, font names).
-- The `[hidden]` rule at the top of `styles.css` is needed: without it, elements styled with `display: flex` ignore the `hidden` attribute (this made the File menu stay open once).
+- Put user-visible text in the element with `textContent`, never `innerHTML`, when it comes from users (brush names, layer names, font names, library item names).
+- The `[hidden]` rule at the top of `styles.css` is needed: without it, elements styled with `display: flex` ignore the `hidden` attribute.
 - Pointer code must keep `touch-action: none` on the canvas area and handle `pointercancel`.
+- Anything that changes a layer's pixels must leave `L.dirty = true` (`recordCrop` and `restore` do), or the change won't reach the cloud.
 
 ## Known issues
 
-- Apple Pencil pressure did not visibly change brush size or opacity on the owner's iPad in Safari. The cause was not found. The Edit tab's test pad prints the pressure range of each stroke ("Pen pressure that stroke: 0.12 to 0.88") so the next session can tell whether the browser sends varying pressure. If it reports a flat range, the browser is not passing pressure through. If the range varies, the bug is in `engine.js`.
+- Apple Pencil pressure did not visibly change brush size or opacity on the owner's iPad in Safari. The cause was not found. The Edit tab's test pad prints the pressure range of each stroke. A flat range means the browser isn't passing pressure through. A varying range means the bug is in `engine.js`.
 - Not tested on Android or on non-Apple styluses.
-- Large canvases with many layers will be slower than a native app.
+- Large canvases with many layers use a lot of memory (each layer is w × h × 4 bytes, plus a full copy during each stroke for undo). The New image dialog warns above 9 megapixels.
+- Opening a library image always downloads every layer (no local cache once synced).
 
 ## Ideas the owner may want next
 
-- A homepage with a library of the user's drawings and folders for multiple artworks. **The owner chose to wait for the cloud version** rather than a device-only library (2026-10-11). The app would then move off the root (for example to `draw.html`). Saving drawings to the cloud needs Firebase Storage, which requires upgrading to the pay-as-you-go Blaze plan (it has a free monthly allowance). Firestore documents are capped at 1 MB, too small for layer images.
-- Canvas size per drawing (comes with the library): the library's "Create new" button lets people pick their canvas size. The owner does not want a fixed size forever. `DOC_W` / `DOC_H` are constants today, and layers, the buffer, the overlay, undo crops and autosave all assume them, so they need to become per-document values.
-- Further off, if Sketchroom becomes an app: a pixel art mode with pixel tiles (a grid canvas), building on the existing layers.
 - Painting limited to the inside of a selection (as in Procreate). Today a selection only moves or deletes pixels, and switching tools drops it.
 - Transform for a selection (scale and rotate), not just move.
+- Pixel art extras: tile preview (see a tile repeated), symmetry or mirror drawing, an indexed palette, exporting each tile as its own PNG.
+- Sharing an image or a project with another user (would need new Firestore and Storage rules).
 
 ## Testing
 
-There is no test suite. Check changes by serving the folder (see "Running locally") and trying: each tab, each tool, drawing with a few brushes, undo and redo, adding and deleting layers, the text tool, the Edit tab test pad, and the color pop-up (drag the wheel, pick, add and remove saved colors, then tap the canvas to close it without drawing). With Firebase on, also check three states: signed out (free brushes show, Save asks to sign in), signed in (save, update and delete My brushes, suggest a brush, upload a font) and admin (Add to free library, Add or Decline suggestions). For the tools, check:
-- fill inside a shape outline, then undo
+There is no test suite. Check changes by serving the folder (see "Running locally") and trying the checks below.
+
+**Editor:**
+- each tab and each tool
+- drawing with a few brushes, undo and redo
+- adding and deleting layers
+- the text tool and the Edit tab test pad
+- the color pop-up
+
+**With Firebase on:**
+- signed out: the homepage offers Sign in and Quick sketch
+- signed in: My brushes, suggest a brush, upload a font, plus the library checks below
+- admin: Add to free library, Add or Decline suggestions
+
+**Library:**
+- create an image, folder and project
+- draw, go back to the library, and reopen the image: it must come back from the cloud, with every layer
+- Move to…, Rename, Duplicate, Delete (a project deletes everything in it)
+- Import a file (a drawing file and a picture)
+- the quick sketch's "Add it to the library"
+- a pixel art tileset: pencil, eraser, line, shapes, fill, select and move with hard edges, Export PNG 8× bigger
+
+**Tools:**
+- fill inside an outline
 - line with Shift
-- filled and outline shapes
-- smudge across an edge
-- select, move, Deselect, and undo the move
-- lock a layer and try to draw on it
-- merge down, then undo
+- shapes
+- smudge
+- select, move and undo
+- lock a layer
+- merge down
 - import an image
 - save and reopen a drawing file
-- brush export and import. After any change to startup code in `app.js`, reload and confirm the tabs and canvas still respond (an error before `wire()` runs leaves the page looking alive but dead).
+- brush export and import
+
+**After any change to startup code** in `app.js`, reload and confirm the homepage and editor still respond.

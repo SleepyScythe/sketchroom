@@ -7,16 +7,19 @@ function applyView() {
   var v = S.view; stage.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.s + ')';
   $('#zoomVal').textContent = Math.round(v.s * 100) + '%';
   if (S.sel) drawSelOverlay(); // the outline width depends on the zoom
+  drawGrid();
 }
+// Pixel art needs to zoom much further in than a regular image.
+function maxZoom() { return isPixel() ? 64 : 8; }
 function fit() {
   var r = vp.getBoundingClientRect(); if (!r.width) return;
-  var s = clamp(Math.min((r.width - 32) / DOC_W, (r.height - 32) / DOC_H), 0.05, 2);
+  var s = clamp(Math.min((r.width - 32) / DOC_W, (r.height - 32) / DOC_H), 0.05, isPixel() ? 48 : 2);
   S.view.s = s; S.view.x = (r.width - DOC_W * s) / 2; S.view.y = (r.height - DOC_H * s) / 2; applyView();
 }
 function zoomAt(factor, cx, cy) {
   var r = vp.getBoundingClientRect(), v = S.view;
   var px = cx == null ? r.width / 2 : cx - r.left, py = cy == null ? r.height / 2 : cy - r.top;
-  var ns = clamp(v.s * factor, 0.1, 8), k = ns / v.s;
+  var ns = clamp(v.s * factor, 0.05, maxZoom()), k = ns / v.s;
   v.x = px - (px - v.x) * k; v.y = py - (py - v.y) * k; v.s = ns; S.userZoomed = true; applyView();
 }
 function docPos(e) { var r = vp.getBoundingClientRect(); return { x: (e.clientX - r.left - S.view.x) / S.view.s, y: (e.clientY - r.top - S.view.y) / S.view.s }; }
@@ -55,6 +58,7 @@ function startPinch() {
   panState = null;
 }
 function onDown(e) {
+  if (S.doc && (S.doc.loading || S.doc.broken)) return; // the canvas is only a placeholder
   try { vp.setPointerCapture(e.pointerId); } catch (x) { /* capture is best effort */ }
   if (e.pointerType === 'pen') S.penSeen = true;
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
@@ -72,7 +76,7 @@ function onDown(e) {
   if (S.tool === 'line' || S.tool === 'shape') { beginShape(e, pos); return; }
   if (S.tool === 'smudge') { beginSmudge(e, pos); return; }
   if (S.tool === 'select') { selectDown(e, pos); return; }
-  beginStroke(e);
+  if (isPixel()) beginPixelStroke(e); else beginStroke(e);
 }
 function onMove(e) {
   var rec = pointers.get(e.pointerId);
@@ -81,7 +85,7 @@ function onMove(e) {
     var t = touchList();
     if (t.length >= 2) {
       var mx = (t[0].x + t[1].x) / 2, my = (t[0].y + t[1].y) / 2, d = Math.hypot(t[0].x - t[1].x, t[0].y - t[1].y) || 1;
-      var r = vp.getBoundingClientRect(), ns = clamp(pinch.s0 * d / pinch.d0, 0.1, 8);
+      var r = vp.getBoundingClientRect(), ns = clamp(pinch.s0 * d / pinch.d0, 0.05, maxZoom());
       S.view.s = ns; S.view.x = (mx - r.left) - pinch.doc.x * ns; S.view.y = (my - r.top) - pinch.doc.y * ns; S.userZoomed = true; applyView();
     }
     return;

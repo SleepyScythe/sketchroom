@@ -1,4 +1,5 @@
-/* Sketchroom: Brush and font storage. Firebase (Google sign-in + Firestore) when configured, otherwise localStorage.
+/* Sketchroom: Accounts and everything kept in them. Firebase (Google sign-in, Firestore, Cloud Storage) when configured,
+   otherwise localStorage for brushes and fonts.
    Plain script. Shares globals with the other files in js/; load order is set in index.html. */
 'use strict';
 
@@ -6,11 +7,15 @@
    Free library: brushes/{id}, fonts/{id}. Everyone reads, admins write.
    Private: users/{uid}/brushes/{id}, users/{uid}/fonts/{id}. Only that user.
    Saved colors: users/{uid}/settings/colors { colors: [...] } when signed in, otherwise localStorage.
+   Drawing library: users/{uid}/items/{id} (projects, folders, images) and the layer PNGs in Cloud Storage.
    Admins: admins/{uid} exists. Created by hand in the Firebase console. */
+var storeReady = null;
 var store = { online: false, add: null, update: null, remove: null, addFont: null, signIn: null, signOut: null,
   saveColors: async function (list) { saveLocalColors(list); },
   // Without Firebase, uploaded fonts last until the page reloads, and suggestions are not available.
-  addUploadedFont: async function () {}, removeUploadedFont: async function () {}, requestShare: null };
+  addUploadedFont: async function () {}, removeUploadedFont: async function () {}, requestShare: null,
+  // Resolves once the first sign-in state is known, so the first page shown is the right one.
+  ready: new Promise(function (r) { storeReady = r; }) };
 function fontDocId(family) { return family.replace(/[^A-Za-z0-9]/g, '-').toLowerCase(); }
 // Saved colors in this browser. They start as the default swatches.
 function localColors() {
@@ -38,9 +43,9 @@ function fontList(snap) {
 async function initStore() {
   var fb = window.firebase, cfg = window.FIREBASE_CONFIG;
   var web = location.protocol === 'http:' || location.protocol === 'https:';
-  if (!fb || !cfg || !web) { localStore(); renderBrushes(); rebuildFonts(); renderAccount(); return; }
-  try { fb.initializeApp(cfg); } catch (e) { localStore(); renderBrushes(); rebuildFonts(); renderAccount(); return; }
-  var db = fb.firestore(), auth = fb.auth();
+  if (!fb || !cfg || !web) { localStore(); renderBrushes(); rebuildFonts(); renderAccount(); storeReady(); return; }
+  try { fb.initializeApp(cfg); } catch (e) { localStore(); renderBrushes(); rebuildFonts(); renderAccount(); storeReady(); return; }
+  var db = fb.firestore(), auth = fb.auth(), files = fb.storage ? fb.storage() : null;
   store.online = true;
   var lib = { brushes: db.collection('brushes'), fonts: db.collection('fonts') };
   var unsub = [];
@@ -83,6 +88,27 @@ async function initStore() {
     var u = auth.currentUser; if (!u) throw new Error('signed out');
     await db.collection('requests').doc(u.uid + '_' + item.id).set({ name: item.name, params: item.params, at: Date.now(), by: u.uid, byName: (S.myName || '').slice(0, 80), brushId: item.id });
   };
+  // The drawing library. Items are kept in S.items by the listener below.
+  store.createItem = async function (data) { var id = uid() + uid(); await home().collection('items').doc(id).set(data); return id; };
+  store.updateItem = async function (id, patch) { await home().collection('items').doc(id).update(patch); };
+  store.deleteItem = async function (id) { await home().collection('items').doc(id).delete(); };
+  var layerRef = function (imgId, layerId) {
+    if (!files) throw new Error('Cloud Storage is not available');
+    return files.ref('users/' + auth.currentUser.uid + '/images/' + imgId + '/' + layerId + '.png');
+  };
+  // no-cache: the same file is overwritten on every save, so browsers must not reuse an old copy.
+  store.uploadLayer = async function (imgId, layerId, blob) { await layerRef(imgId, layerId).put(blob, { contentType: 'image/png', cacheControl: 'no-cache' }); };
+  store.downloadLayer = async function (imgId, layerId) {
+    var url;
+    try { url = await layerRef(imgId, layerId).getDownloadURL(); }
+    catch (e) { if (e && e.code === 'storage/object-not-found') return null; throw e; }
+    var r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('download failed ' + r.status);
+    return r.blob();
+  };
+  store.deleteLayer = async function (imgId, layerId) {
+    try { await layerRef(imgId, layerId).delete(); } catch (e) { if (!e || e.code !== 'storage/object-not-found') throw e; }
+  };
   store.approveRequest = async function (r) { await store.add(r.name, cleanParams(r.params), 'library'); await db.collection('requests').doc(r.id).delete(); };
   store.declineRequest = async function (r) { await db.collection('requests').doc(r.id).delete(); };
 
@@ -95,6 +121,15 @@ async function initStore() {
 
   auth.onAuthStateChanged(async function (user) {
     unsub.forEach(function (u) { u(); }); unsub = [];
+    var was = S.myId;
+    S.items = {}; S.itemsReady = false;
+    if (user) {
+      unsub.push(db.collection('users').doc(user.uid).collection('items').limit(5000).onSnapshot(function (snap) {
+        var items = {};
+        snap.docs.forEach(function (d) { var v = d.data() || {}; v.id = d.id; items[d.id] = v; });
+        S.items = items; S.itemsReady = true; renderHome();
+      }, function () { S.itemsReady = true; renderHome(); toast('Your library could not be loaded. Check your connection.'); }));
+    }
     S.myId = user ? user.uid : null;
     S.myName = user ? (user.displayName || user.email || 'You') : '';
     S.canEdit = false; S.mine = []; S.myFonts = []; S.requests = []; S.myRequests = []; S.uploadedFonts = [];
@@ -137,6 +172,8 @@ async function initStore() {
       }
     } else S.saved = localColors();
     renderAccount(); renderBrushes(); rebuildFonts(); renderSaved(); renderUploadedFonts();
+    storeReady();
+    if (was !== S.myId) accountChanged();
   });
 }
 

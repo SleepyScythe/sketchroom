@@ -5,6 +5,7 @@
 /* ---------- quick settings per tool ---------- */
 function quickTitle() {
   var t = S.tool, bn = S.brushName + (S.dirty ? ' (edited)' : '');
+  if (isPixel() && { brush: 1, eraser: 1, line: 1, shape: 1 }[t]) return { brush: 'Pixel pencil', eraser: 'Pixel eraser', line: 'Pixel line', shape: 'Pixel shapes' }[t];
   return t === 'eraser' ? 'Eraser' : t === 'smudge' ? 'Smudge' : t === 'fill' ? 'Fill' : t === 'select' ? 'Select and move'
     : t === 'line' ? 'Line with ' + bn : t === 'shape' ? 'Shapes with ' + bn : bn;
 }
@@ -74,7 +75,8 @@ function fillAt(pos) {
   }
   var f = floodMask(src.getContext('2d').getImageData(0, 0, W, Hh).data, W, Hh, x, y, S.fill.tolerance), mask = f.mask, bb = f.bb;
   // The filled area, plus a 2px ring around it painted *behind* existing pixels, so it tucks under soft line edges without a halo.
-  var R = 2, bx0 = Math.max(0, bb.x0 - R), by0 = Math.max(0, bb.y0 - R), bx1 = Math.min(W - 1, bb.x1 + R), by1 = Math.min(Hh - 1, bb.y1 + R);
+  // Pixel art has no soft edges, so it gets an exact fill with no ring.
+  var R = isPixel() ? 0 : 2, bx0 = Math.max(0, bb.x0 - R), by0 = Math.max(0, bb.y0 - R), bx1 = Math.min(W - 1, bb.x1 + R), by1 = Math.min(Hh - 1, bb.y1 + R);
   var bw = bx1 - bx0 + 1, bh = by1 - by0 + 1, core = new ImageData(bw, bh), ring = new ImageData(bw, bh);
   var rgb = hexToRgb(S.color), A = Math.round(S.fill.opacity * 2.55);
   var put = function (img, px, py) { var j = ((py - by0) * bw + (px - bx0)) * 4; img.data[j] = rgb[0]; img.data[j + 1] = rgb[1]; img.data[j + 2] = rgb[2]; img.data[j + 3] = A; };
@@ -114,6 +116,7 @@ function constrainEnd(tool, a, z, shift) {
 }
 // Draws the line or shape with the current brush and returns the area it touched (or null).
 function drawShape(g, tool, a, z, b) {
+  if (isPixel()) return drawPixelShape(g, tool, a, z);
   if (tool === 'line') { var le = new Engine(g, b, S.color, 1, 1); le.add(a.x, a.y, 1); le.add(z.x, z.y, 1); return le.bb; }
   var x0 = Math.min(a.x, z.x), y0 = Math.min(a.y, z.y), x1 = Math.max(a.x, z.x), y1 = Math.max(a.y, z.y);
   if (x1 - x0 < 1 && y1 - y0 < 1) return null;
@@ -138,6 +141,7 @@ function drawShape(g, tool, a, z, b) {
 function beginShape(e, pos) {
   var L = activeLayer(); if (!canDraw(L)) return;
   var tool = S.tool, b = P(S.brush); b.smoothing = 0; // straight means straight
+  if (isPixel()) b.opacity = S.pxPen.opacity;
   var snap = crop(L.canvas, 0, 0, DOC_W, DOC_H), st = { a: pos, z: pos, bb: null };
   bctx.setTransform(1, 0, 0, 1, 0, 0); bctx.globalAlpha = 1; bctx.clearRect(0, 0, DOC_W, DOC_H);
   buffer.style.opacity = (b.opacity / 100) * L.opacity; buffer.style.mixBlendMode = L.blend;

@@ -28,7 +28,11 @@ function wire() {
     if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
     else { S.view.x -= e.deltaX; S.view.y -= e.deltaY; S.userZoomed = true; applyView(); }
   }, { passive: false });
-  window.addEventListener('resize', function () { if (!S.userZoomed) fit(); });
+  window.addEventListener('resize', function () { if (!S.userZoomed) fit(); drawGrid(); });
+  $('#homeBtn').addEventListener('click', function () {
+    var it = S.doc && !S.doc.local ? S.items[S.doc.id] : null;
+    location.hash = it && it.parent && S.items[it.parent] ? '#/c/' + it.parent : '#/';
+  });
 
   $('#fileBtn').addEventListener('click', function (e) { e.stopPropagation(); var m = $('#fileMenu'); m.hidden = !m.hidden; $('#fileBtn').setAttribute('aria-expanded', String(!m.hidden)); });
   document.addEventListener('click', function () {
@@ -37,6 +41,7 @@ function wire() {
   });
   $('#exportPng').addEventListener('click', function () { exportPng(false); });
   $('#exportPngT').addEventListener('click', function () { exportPng(true); });
+  $('#exportPngBig').addEventListener('click', function () { exportPng(true, 8); });
   // Buttons that throw away the current drawing ask for a second click first.
   var armed = function (btn, label, warning, action) {
     var timer = 0;
@@ -48,7 +53,7 @@ function wire() {
       clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; action();
     });
   };
-  armed($('#newDoc'), 'New drawing', 'Click again to erase everything', newDoc);
+  armed($('#newDoc'), 'Clear drawing', 'Click again to erase everything', newDoc);
   armed($('#openFile'), 'Open drawing file', 'Click again to replace this drawing', function () { $('#openFileInput').click(); });
   $('#openFileInput').addEventListener('change', function (e) { openDrawingFile(e.target.files[0]); e.target.value = ''; });
   $('#saveFile').addEventListener('click', saveDrawingFile);
@@ -152,7 +157,10 @@ function wire() {
     }
   });
   document.addEventListener('keyup', function (e) { if (e.key === ' ') { spaceDown = false; setTool(S.tool); } });
-  document.addEventListener('visibilitychange', function () { if (document.hidden) saveDoc(); });
+  // Leaving the tab or closing it: save now rather than in a few seconds.
+  var flush = function () { if (!S.doc) return; clearTimeout(saveTimer); saveDoc(); if (!S.doc.local) cloudSave(); };
+  document.addEventListener('visibilitychange', function () { if (document.hidden) flush(); });
+  window.addEventListener('pagehide', flush);
 
   var re = function () { renderBrushes(); drawEdit(); };
   try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', re); } catch (e) { /* older browsers */ }
@@ -162,14 +170,15 @@ function wire() {
 /* ---------- start ---------- */
 async function init() {
   var L = makeLayer('Layer ' + (++layerCount)); S.layers.push(L); S.active = L; renderStack();
-  buildSliders(); wire(); initPad(); initColor(); initTools();
+  buildSliders(); wire(); initPad(); initColor(); initTools(); initLibrary();
   setTool('brush');
   // Installable app: the service worker lets the app open offline. It always tries the network first, so updates show up.
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(function () { /* optional */ });
   selectBrush('pen', 'Technical Pen', PRESETS[1].p);
   renderBrushes(); renderLayers(); rebuildFonts(); updateHist();
-  requestAnimationFrame(function () { fit(); });
-  await loadDoc();
-  await initStore();
+  initStore();
+  // The first page depends on whether someone is signed in. Don't wait forever if Firebase is slow.
+  await Promise.race([store.ready, new Promise(function (r) { setTimeout(r, 6000); })]);
+  route();
 }
 init();

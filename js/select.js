@@ -32,12 +32,14 @@ function selHover(e) { if (S.sel) vp.style.cursor = inSelection(docPos(e)) ? 'mo
 function selectDown(e, pos) {
   if (inSelection(pos)) { beginSelMove(e, pos); return; }
   dropSelection(true);
-  var kind = S.selKind, a = pos;
+  // In pixel art the outline follows pixel edges.
+  var snapPt = function (p) { return isPixel() ? { x: Math.round(p.x), y: Math.round(p.y) } : p; };
+  var kind = S.selKind, a = snapPt(pos);
   S.sel = { pts: [[a.x, a.y]], dx: 0, dy: 0, float: null, drawing: true };
   drag = {
     id: e.pointerId,
     move: function (ev) {
-      var q = docPos(ev), s = S.sel;
+      var q = snapPt(docPos(ev)), s = S.sel;
       if (kind === 'rect') s.pts = [[a.x, a.y], [q.x, a.y], [q.x, q.y], [a.x, q.y]];
       else { var l = s.pts[s.pts.length - 1]; if (Math.hypot(q.x - l[0], q.y - l[1]) > 2 / S.view.s) s.pts.push([q.x, q.y]); }
       drawSelOverlay();
@@ -56,8 +58,15 @@ function liftSelection(L) {
   var s = S.sel, b = selBounds(s), path = selPath(s);
   var x0 = Math.floor(b.x0), y0 = Math.floor(b.y0), w = Math.max(1, Math.ceil(b.x1) - x0), h = Math.max(1, Math.ceil(b.y1) - y0);
   var snap = crop(L.canvas, 0, 0, DOC_W, DOC_H), fc = document.createElement('canvas'); fc.width = w; fc.height = h;
-  var fg = fc.getContext('2d'); fg.translate(-x0, -y0); fg.clip(path); fg.drawImage(L.canvas, 0, 0);
-  L.ctx.save(); L.ctx.globalCompositeOperation = 'destination-out'; L.ctx.fill(path); L.ctx.restore();
+  var fg = fc.getContext('2d');
+  if (isPixel()) {
+    var m = hardMask(path, x0, y0, w, h);
+    fg.drawImage(L.canvas, -x0, -y0); fg.globalCompositeOperation = 'destination-in'; fg.drawImage(m, 0, 0); fg.globalCompositeOperation = 'source-over';
+    L.ctx.globalCompositeOperation = 'destination-out'; L.ctx.drawImage(m, x0, y0); L.ctx.globalCompositeOperation = 'source-over';
+  } else {
+    fg.translate(-x0, -y0); fg.clip(path); fg.drawImage(L.canvas, 0, 0);
+    L.ctx.save(); L.ctx.globalCompositeOperation = 'destination-out'; L.ctx.fill(path); L.ctx.restore();
+  }
   s.float = { canvas: fc, x: x0, y: y0, L: L, snap: snap, bb0: { x0: x0, y0: y0, x1: x0 + w, y1: y0 + h } };
 }
 function beginSelMove(e, pos) {
@@ -94,7 +103,10 @@ function deleteSelection() {
   } else {
     var L = activeLayer(); if (!canDraw(L)) return;
     var snap = crop(L.canvas, 0, 0, DOC_W, DOC_H), b = selBounds(s);
-    L.ctx.save(); L.ctx.globalCompositeOperation = 'destination-out'; L.ctx.fill(selPath(s)); L.ctx.restore();
+    if (isPixel()) {
+      var x0 = Math.floor(b.x0), y0 = Math.floor(b.y0), m = hardMask(selPath(s), x0, y0, Math.max(1, Math.ceil(b.x1) - x0), Math.max(1, Math.ceil(b.y1) - y0));
+      L.ctx.globalCompositeOperation = 'destination-out'; L.ctx.drawImage(m, x0, y0); L.ctx.globalCompositeOperation = 'source-over';
+    } else { L.ctx.save(); L.ctx.globalCompositeOperation = 'destination-out'; L.ctx.fill(selPath(s)); L.ctx.restore(); }
     recordCrop(L, snap, { x0: b.x0 - 1, y0: b.y0 - 1, x1: b.x1 + 1, y1: b.y1 + 1 });
   }
   drawSelOverlay();
