@@ -28,25 +28,6 @@ function setTool(t) {
   ring.hidden = true; octx.clearRect(0, 0, DOC_W, DOC_H);
   syncSliders();
 }
-function setColor(hex, remember) {
-  hex = hex.toLowerCase(); S.color = hex;
-  $('#colorChip').style.background = hex; $('#colorInput').value = hex; $('#hexInput').value = hex;
-  $$('#palette .sw').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.c === hex)); });
-  if (remember) {
-    S.recent = [hex].concat(S.recent.filter(function (c) { return c !== hex; })).slice(0, 12); renderRecent();
-  }
-}
-function renderRecent() {
-  var host = $('#recent'); host.innerHTML = '';
-  if (!S.recent.length) { host.style.display = 'block'; host.innerHTML = '<div class="empty" style="grid-column:1/-1">Colors you use show up here.</div>'; return; }
-  host.style.display = '';
-  S.recent.forEach(function (c) { host.appendChild(swatch(c)); });
-}
-function swatch(c) {
-  var b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.dataset.c = c;
-  b.setAttribute('aria-label', 'Color ' + c); b.setAttribute('aria-pressed', String(c === S.color));
-  b.addEventListener('click', function () { setColor(c, true); }); return b;
-}
 
 /* ---------- pointer handling ---------- */
 var pointers = new Map(), cur = null, panState = null, pinch = null, spaceDown = false;

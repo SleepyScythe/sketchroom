@@ -39,6 +39,13 @@ service cloud.firestore {
       allow read, delete: if isUser(uid);
       allow create, update: if isUser(uid) && validFont(request.resource.data);
     }
+    match /users/{uid}/settings/colors {
+      allow read, delete: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['colors', 'at'])
+        && request.resource.data.colors is list && request.resource.data.colors.size() <= 60
+        && request.resource.data.at is number;
+    }
     match /admins/{uid} {
       allow read: if isUser(uid);
     }

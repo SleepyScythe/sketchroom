@@ -14,7 +14,6 @@ function showTab(name) {
 function wire() {
   $$('.tab').forEach(function (t) { t.addEventListener('click', function () { showTab(t.dataset.tab); }); });
   $$('[data-tool]').forEach(function (b) { b.addEventListener('click', function () { setTool(b.dataset.tool); }); });
-  $('#colorChip').addEventListener('click', function () { showTab('color'); });
   $('#undoBtn').addEventListener('click', undo); $('#redoBtn').addEventListener('click', redo);
   $('#zoomIn').addEventListener('click', function () { zoomAt(1.25); }); $('#zoomOut').addEventListener('click', function () { zoomAt(0.8); });
   $('#zoomFit').addEventListener('click', function () { S.userZoomed = false; fit(); });
@@ -77,14 +76,6 @@ function wire() {
   $('#layerName').addEventListener('input', function (e) { S.active.name = e.target.value || 'Layer'; var rows = $$('#layerList .lrow'); var idx = S.layers.length - 1 - S.layers.indexOf(S.active); if (rows[idx]) $('.ln', rows[idx]).textContent = S.active.name; scheduleSave(); });
   $('#blendSel').addEventListener('change', function (e) { S.active.blend = e.target.value; S.active.canvas.style.mixBlendMode = S.active.blend; scheduleSave(); });
 
-  $('#colorInput').addEventListener('input', function (e) { setColor(e.target.value, false); });
-  $('#colorInput').addEventListener('change', function (e) { setColor(e.target.value, true); });
-  $('#hexInput').addEventListener('change', function (e) {
-    var v = e.target.value.trim(); if (v[0] !== '#') v = '#' + v;
-    if (/^#[0-9a-f]{6}$/i.test(v)) setColor(v, true); else { toast('Use a six digit hex color, like #3a78d8.'); e.target.value = S.color; }
-  });
-  SWATCHES.forEach(function (c) { $('#palette').appendChild(swatch(c)); });
-
   $('#textStr').addEventListener('input', function (e) { S.text.str = e.target.value; });
   $('#fontSel').addEventListener('change', function (e) { S.text.font = e.target.value; updateFontPrev(); ensureFont(); });
   var tgl = function (id, key) { $(id).addEventListener('click', function () { S.text[key] = !S.text[key]; $(id).setAttribute('aria-pressed', String(S.text[key])); updateFontPrev(); ensureFont(); }); };
@@ -138,8 +129,8 @@ function wire() {
 /* ---------- start ---------- */
 async function init() {
   var L = makeLayer('Layer ' + (++layerCount)); S.layers.push(L); S.active = L; renderStack();
-  buildSliders(); wire(); initPad();
-  setColor(S.color, false); renderRecent(); setTool('brush');
+  buildSliders(); wire(); initPad(); initColor();
+  setTool('brush');
   selectBrush('pen', 'Technical Pen', PRESETS[1].p);
   renderBrushes(); renderLayers(); rebuildFonts(); updateHist();
   requestAnimationFrame(function () { fit(); });

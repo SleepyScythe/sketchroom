@@ -5,9 +5,17 @@
 /* ---------- storage ----------
    Free library: brushes/{id}, fonts/{id}. Everyone reads, admins write.
    Private: users/{uid}/brushes/{id}, users/{uid}/fonts/{id}. Only that user.
+   Saved colors: users/{uid}/settings/colors { colors: [...] } when signed in, otherwise localStorage.
    Admins: admins/{uid} exists. Created by hand in the Firebase console. */
-var store = { online: false, add: null, update: null, remove: null, addFont: null, signIn: null, signOut: null };
+var store = { online: false, add: null, update: null, remove: null, addFont: null, signIn: null, signOut: null,
+  saveColors: async function (list) { saveLocalColors(list); } };
 function fontDocId(family) { return family.replace(/[^A-Za-z0-9]/g, '-').toLowerCase(); }
+// Saved colors in this browser. They start as the default swatches.
+function localColors() {
+  try { var v = JSON.parse(localStorage.getItem('sketchroom.colors')); return Array.isArray(v) ? cleanColors(v) : SWATCHES.slice(); }
+  catch (e) { return SWATCHES.slice(); }
+}
+function saveLocalColors(list) { try { localStorage.setItem('sketchroom.colors', JSON.stringify(list)); } catch (e) { /* storage unavailable */ } }
 function localStore() {
   var read = function (k) { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { return []; } };
   var write = function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } };
@@ -61,6 +69,10 @@ async function initStore() {
     }
   };
   store.signOut = async function () { await auth.signOut(); toast('Signed out.'); };
+  store.saveColors = async function (list) {
+    if (auth.currentUser) await home().collection('settings').doc('colors').set({ colors: list, at: Date.now() });
+    else saveLocalColors(list);
+  };
 
   lib.brushes.orderBy('at', 'asc').limit(500).onSnapshot(function (snap) {
     S.library = brushList(snap, 'library'); renderBrushes();
@@ -84,8 +96,15 @@ async function initStore() {
       unsub.push(mine.collection('fonts').orderBy('at', 'asc').limit(200).onSnapshot(function (snap) {
         S.myFonts = fontList(snap); rebuildFonts();
       }, function () { /* fonts fall back to the built-in list */ }));
-    }
-    renderAccount(); renderBrushes(); rebuildFonts();
+      var colors = mine.collection('settings').doc('colors');
+      unsub.push(colors.onSnapshot(function (snap) {
+        if (snap.exists) { S.saved = cleanColors((snap.data() || {}).colors); renderSaved(); }
+        // First sign-in: start the account's colors from this browser's. Only when the server says the doc is missing,
+        // so an offline cache miss never overwrites real saved colors.
+        else if (!snap.metadata.fromCache) colors.set({ colors: S.saved, at: Date.now() }).catch(function () { /* keep the device colors */ });
+      }, function () { /* keep the device colors */ }));
+    } else S.saved = localColors();
+    renderAccount(); renderBrushes(); rebuildFonts(); renderSaved();
   });
 }
 

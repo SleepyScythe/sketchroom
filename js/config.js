@@ -35,7 +35,7 @@ var S = {
   tool: 'brush', color: '#222831', brush: P({}), base: P({}), brushId: 'pen', brushName: 'Technical Pen', dirty: false,
   eraser: P({ size: 26, hardness: 85, spacing: 6, smoothing: 20 }),
   layers: [], active: null, view: { x: 0, y: 0, s: 1 }, penSeen: false, fingerDraws: false, userZoomed: false,
-  recent: [], library: [], mine: [], sharedFonts: [], myFonts: [], myId: null, myName: '', canEdit: false,
+  hsv: null, recent: [], saved: [], editColors: false, library: [], mine: [], sharedFonts: [], myFonts: [], myId: null, myName: '', canEdit: false,
   text: { str: 'Sketchroom', font: 'Caveat', size: 120, bold: false, italic: false }
 };
 var layerCount = 0;

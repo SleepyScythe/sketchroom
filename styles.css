@@ -125,7 +125,21 @@ textarea { resize: vertical; min-height: 64px; }
 .palette { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .sw { width: 100%; aspect-ratio: 1; border-radius: 7px; border: 1px solid var(--line); cursor: pointer; padding: 0; min-width: 0; }
 .sw[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
-.colorbig { width: 100%; height: 56px; border: 1px solid var(--line); border-radius: 10px; background: none; padding: 2px; cursor: pointer; }
+.palette .empty { grid-column: 1 / -1; }
+.palette.mini { grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.palette.editing .sw { position: relative; }
+.palette.editing .sw::after { content: "\00d7"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 17px; font-weight: 700; text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.palhead { display: flex; align-items: center; gap: 2px; }
+.palhead h3 { flex: 1; }
+.ibtn.sm { width: 30px; height: 30px; }
+.wheel { display: block; width: 100%; max-width: 260px; aspect-ratio: 1 / 1; margin: 0 auto; touch-action: none; cursor: crosshair; }
+.wheel.mini { max-width: 196px; }
+.nowchip { flex: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: #222831; }
+.chip[aria-expanded="true"] { box-shadow: 0 0 0 3px var(--accent); }
+.colorpop { position: fixed; z-index: 40; width: min(300px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: 0 14px 40px var(--shadow); display: flex; flex-direction: column; gap: 10px; }
+.colorpop h3 { margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+.popnow { display: flex; align-items: center; gap: 10px; }
+.pophex { font-family: ui-monospace, "Space Mono", monospace; color: var(--mute); }
 .fontprev { font-size: 26px; line-height: 1.2; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 860px) {

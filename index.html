@@ -11,7 +11,7 @@
 <meta property="og:type" content="website">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&family=Caveat&family=Permanent+Marker&family=Pacifico&family=Bebas+Neue&family=Playfair+Display&family=Lobster&family=Press+Start+2P&family=Special+Elite&family=Abril+Fatface&family=Cinzel&family=Shadows+Into+Light&family=Oswald&family=Indie+Flower&family=Dancing+Script&family=Righteous&family=Bangers&family=Amatic+SC&family=Rock+Salt&family=Satisfy&family=Anton&family=Archivo+Black&family=Monoton&family=Cormorant+Garamond&family=DM+Serif+Display&family=Syne&family=Space+Mono&display=swap">
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 <div class="app">
@@ -52,7 +52,7 @@
       <button class="ibtn" data-tool="picker" title="Color picker (I)" aria-label="Color picker" data-icon="pipette"></button>
       <button class="ibtn" data-tool="hand" title="Move canvas (H or hold Space)" aria-label="Move canvas" data-icon="hand"></button>
       <span class="grow"></span>
-      <button class="chip" id="colorChip" title="Current color" aria-label="Current color. Open color tab"></button>
+      <button class="chip" id="colorChip" title="Colors" aria-label="Current color. Open quick colors" aria-haspopup="dialog" aria-expanded="false"></button>
     </nav>
 
     <section class="viewport" id="vp" aria-label="Drawing canvas">
@@ -129,10 +129,15 @@
       </div>
 
       <div class="pane" id="pane-color" hidden>
-        <input type="color" class="colorbig" id="colorInput" aria-label="Pick a color" value="#222831">
-        <div class="inline"><input type="text" id="hexInput" maxlength="7" aria-label="Hex color" value="#222831"></div>
-        <h3>Swatches</h3>
+        <canvas class="wheel" id="wheelBig" aria-label="Color wheel. Drag the ring to pick a hue and the square to pick the shade"></canvas>
+        <div class="inline"><span class="nowchip" id="colorNow"></span><input type="text" id="hexInput" maxlength="7" aria-label="Hex color" value="#222831"></div>
+        <div class="palhead">
+          <h3>Saved colors</h3>
+          <button class="ibtn sm" id="addColor" title="Save the current color" aria-label="Save the current color" data-icon="plus"></button>
+          <button class="ibtn sm" id="editColors" title="Remove saved colors" aria-label="Remove saved colors" aria-pressed="false" data-icon="edit"></button>
+        </div>
         <div class="palette" id="palette"></div>
+        <p class="hint" id="savedHint"></p>
         <h3>Recent</h3>
         <div class="palette" id="recent"></div>
       </div>
@@ -155,6 +160,19 @@
       </div>
     </aside>
   </div>
+
+  <div class="colorpop" id="colorPop" role="dialog" aria-label="Quick colors" hidden>
+    <canvas class="wheel mini" id="wheelMini" aria-label="Color wheel. Drag the ring to pick a hue and the square to pick the shade"></canvas>
+    <div class="popnow"><span class="nowchip" id="popNow"></span><span class="pophex" id="popHex"></span></div>
+    <div class="palhead">
+      <h3>Saved colors</h3>
+      <button class="ibtn sm" id="popAdd" title="Save the current color" aria-label="Save the current color" data-icon="plus"></button>
+      <button class="ibtn sm" id="popEdit" title="Remove saved colors" aria-label="Remove saved colors" aria-pressed="false" data-icon="edit"></button>
+    </div>
+    <div class="palette mini" id="popSaved"></div>
+    <h3>Recent</h3>
+    <div class="palette mini" id="popRecent"></div>
+  </div>
 </div>
 
 <!-- Firebase (Google sign-in and the brush library). If these fail to load, the app keeps brushes in this browser instead. -->
@@ -162,17 +180,18 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=2"></script>
-<script src="js/core.js?v=2"></script>
-<script src="js/config.js?v=2"></script>
-<script src="js/engine.js?v=2"></script>
-<script src="js/layers.js?v=2"></script>
-<script src="js/brushes.js?v=2"></script>
-<script src="js/storage.js?v=2"></script>
-<script src="js/text.js?v=2"></script>
-<script src="js/canvas.js?v=2"></script>
-<script src="js/pad.js?v=2"></script>
-<script src="js/files.js?v=2"></script>
-<script src="js/app.js?v=2"></script>
+<script src="js/firebase-config.js?v=3"></script>
+<script src="js/core.js?v=3"></script>
+<script src="js/config.js?v=3"></script>
+<script src="js/engine.js?v=3"></script>
+<script src="js/layers.js?v=3"></script>
+<script src="js/brushes.js?v=3"></script>
+<script src="js/storage.js?v=3"></script>
+<script src="js/text.js?v=3"></script>
+<script src="js/canvas.js?v=3"></script>
+<script src="js/color.js?v=3"></script>
+<script src="js/pad.js?v=3"></script>
+<script src="js/files.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>
