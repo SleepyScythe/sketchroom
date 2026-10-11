@@ -94,6 +94,12 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 - Import and export of brushes as JSON.
 - Canvas size per drawing: the library's "Create new" button lets people pick their canvas size. The owner does not want a fixed size forever. `DOC_W` / `DOC_H` are constants today, and layers, the buffer, the overlay, undo crops and autosave all assume them, so they need to become per-document values.
 - Further off, if Sketchroom becomes an app: a pixel art mode with pixel tiles (a grid canvas), building on the existing layers.
+- Import image for tracing, from a button in the Layers tab:
+  - The picture goes on its own layer, scaled to fit the canvas, at low opacity (for example 30–40%) and named after the file.
+  - A new empty layer goes above it and becomes the active layer, so the drawing stays separate. The owner's example: layer 1 is the reference image, layer 2 is the drawing.
+  - Use `<input type="file" accept="image/*">`, which offers the Photos library on iPad. Make it undoable like the other layer operations in `layers.js`.
+  - Autosave already stores layers as images, so the reference survives a reload.
+  - A "lock layer" toggle would help, so nobody draws on the reference by mistake.
 - More tools: fill, smudge, selection, shapes, layer merge.
 - Installable app mode (web app manifest and a service worker) for the iPad home screen.
 - Custom font upload (the claude.ai version only supports free Google Fonts by name).
