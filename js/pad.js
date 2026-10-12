@@ -2,6 +2,12 @@
    Plain script. Shares globals with the other files in js/; load order is set in index.html. */
 'use strict';
 
+// The speed slider only matters while speed makes the pressure (chosen, or picked by Automatic for a pen without pressure).
+function updatePenUI() {
+  var host = $('#penSpeedHost'); if (!host) return;
+  host.hidden = !(S.pen.mode === 'speed' || (S.pen.mode === 'auto' && S.pen.src === 'speed'));
+}
+
 /* ---------- test pad in the brush editor ---------- */
 function initPad() {
   var cv = $('#testPad'), g = cv.getContext('2d');
@@ -40,7 +46,9 @@ function initPad() {
   };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
   var mode = $('#penMode'); mode.value = S.pen.mode;
-  mode.addEventListener('change', function () { S.pen.mode = mode.value; savePen(); });
+  mode.addEventListener('change', function () { S.pen.mode = mode.value; savePen(); updatePenUI(); });
+  $('#penSpeedHost').prepend(makeSlider('How much speed changes the stroke', 0, 100, '%', function () { return S.pen.speed; }, function (v) { S.pen.speed = v; savePen(); }));
+  updatePenUI();
   $('#padClear').addEventListener('click', function () {
     bsg.clearRect(0, 0, base.width, base.height); g.clearRect(0, 0, cv.width, cv.height);
     $('#pressureReadout').textContent = 'Draw on the pad above to try this brush and see the pressure your pen sends.';

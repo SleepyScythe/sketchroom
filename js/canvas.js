@@ -46,7 +46,8 @@ var pointers = new Map(), cur = null, drag = null, panState = null, pinch = null
    drawing speed: slow is heavy, fast is light). S.pen.mode, set in the Edit tab: 'auto' uses src, 'pen' always uses the
    pointer, 'speed' always simulates, 'off' is always full pressure. Fingers and the mouse always draw at full pressure. */
 var PEN_KEY = 'sketchroom.pen', FLAT = 0.002;
-S.pen = { mode: 'auto', src: 'pointer' };
+// speed: how much drawing speed changes speed pressure, 0 to 100 (the Edit tab slider). 60 is the original strength.
+S.pen = { mode: 'auto', src: 'pointer', speed: 60 };
 try { var savedPen = JSON.parse(localStorage.getItem(PEN_KEY)); if (savedPen) Object.assign(S.pen, savedPen); } catch (e) { /* storage unavailable */ }
 function savePen() { try { localStorage.setItem(PEN_KEY, JSON.stringify(S.pen)); } catch (e) { /* storage unavailable */ } }
 // The latest force of a stylus touch (Safari only). Touch events arrive alongside pointer events, so this lags by a frame at most.
@@ -60,8 +61,9 @@ function trackStylus(e) {
 document.addEventListener('touchstart', trackStylus, { passive: true, capture: true });
 document.addEventListener('touchmove', trackStylus, { passive: true, capture: true });
 // One per stroke. lo/hi: the pressure used; plo/phi and flo/fhi: what the pointer and the touch force sent.
+function speedEffect() { return clamp(Number(S.pen.speed), 0, 100) / 60 || 0; }
 function newPressure(type) {
-  return { type: type, n: 0, fn: 0, lo: 1, hi: 0, plo: 1, phi: 0, flo: 1, fhi: 0, plast: 0.5, sp: 0.5, prev: null };
+  return { type: type, n: 0, fn: 0, lo: 1, hi: 0, plo: 1, phi: 0, flo: 1, fhi: 0, plast: 0.5, sp: clamp(1 - speedEffect() * 0.5, 0.05, 1), prev: null };
 }
 function samplePressure(st, ev, parent) {
   if (st.type !== 'pen') return 1;
@@ -75,7 +77,7 @@ function samplePressure(st, ev, parent) {
   var t = ev.timeStamp || now;
   if (st.prev) {
     var v = Math.hypot(ev.clientX - st.prev.x, ev.clientY - st.prev.y) / Math.max(1, t - st.prev.t);
-    st.sp += (clamp(1.1 - v * 0.45, 0.15, 1) - st.sp) * 0.25;
+    st.sp += (clamp(1 - speedEffect() * (1 - clamp(1.1 - v * 0.45, 0.15, 1)), 0.05, 1) - st.sp) * 0.25;
   }
   st.prev = { x: ev.clientX, y: ev.clientY, t: t };
   var mode = S.pen.mode, src = mode === 'auto' ? S.pen.src : mode === 'pen' ? 'pointer' : mode;
@@ -87,7 +89,7 @@ function samplePressure(st, ev, parent) {
 function finishPressure(st) {
   if (st.type !== 'pen' || st.n < 6) return;
   var src = st.phi - st.plo >= FLAT ? 'pointer' : st.fn >= 6 && st.fhi - st.flo >= 0.02 ? 'force' : 'speed';
-  if (src !== S.pen.src) { S.pen.src = src; savePen(); }
+  if (src !== S.pen.src) { S.pen.src = src; savePen(); if (typeof updatePenUI === 'function') updatePenUI(); }
 }
 function showPressure(st) {
   var el = $('#pressureReadout'); if (!el) return;

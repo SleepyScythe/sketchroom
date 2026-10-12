@@ -131,7 +131,8 @@ It was first built in Claude and published as a private artifact (https://claude
     - otherwise force if that changed
     - otherwise speed
   - **Edit tab "Pen pressure":** sets `S.pen.mode`: Automatic (`auto`, uses `src`), From the pen (`pen`), From drawing speed (`speed`) or Off (`off`).
-  - **Saved:** both are saved per browser in localStorage `sketchroom.pen`.
+  - **Speed slider:** "How much speed changes the stroke" sets `S.pen.speed`, 0 to 100, default 60. 60 is the original curve, 0 is always full pressure, and 100 is 1.67× as strong (`speedEffect()`). It only shows while speed makes the pressure (`updatePenUI` in `pad.js`).
+  - **Saved:** all three are saved per browser in localStorage `sketchroom.pen`.
   - **Fingers and mouse:** always draw at full pressure.
   - **Why:** a stuck low value made every pressure brush thin and faint.
 - Shortcuts: B brush, E eraser, S smudge, G fill, L line, U shapes, M select, T text, I eyedropper, H or hold Space to pan, [ and ] change size, Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z redo. Esc closes the color pop-up. Esc or Enter drops a selection, and Delete clears the selected pixels.
