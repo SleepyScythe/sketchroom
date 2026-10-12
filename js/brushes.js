@@ -52,7 +52,10 @@ function brushChanged(fromQuick) {
 function syncSliders(skipQuick) {
   if (!skipQuick) quickSliders.forEach(function (s) { s.sync(); });
   editSliders.forEach(function (s) { s.sync(); });
-  $$('#shapeSeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.shape === S.brush.shape)); });
+  $$('#shapeSeg button').forEach(function (b) {
+    b.setAttribute('aria-pressed', String(b.dataset.shape === S.brush.shape));
+    if (b.dataset.shape === 'image') b.hidden = !S.brush.tip;
+  });
   $('#followChk').checked = !!S.brush.follow;
   $('#quickWho').textContent = quickTitle();
 }
@@ -73,12 +76,14 @@ function updateEditorButtons() {
   var cur = currentSaved();
   $('#saveUpdate').disabled = !(cur && canModify(cur));
   $('#revertBrush').disabled = !S.dirty;
-  $('#saveLibrary').hidden = !S.canEdit;
+  var outside = isImported(S.brush);
+  $('#saveLibrary').hidden = !S.canEdit || outside;
   var sug = $('#suggestBrush'), pending = !!cur && S.myRequests.indexOf(cur.id) >= 0;
-  sug.hidden = !store.online || !S.myId || S.canEdit || !cur || cur.where !== 'mine';
+  sug.hidden = !store.online || !S.myId || S.canEdit || !cur || cur.where !== 'mine' || outside;
   sug.disabled = pending; sug.textContent = pending ? 'Suggested, waiting for review' : 'Suggest for free library';
   var hint = $('#editHint');
-  if (!store.online) hint.textContent = 'Saved brushes stay on this device in this browser.';
+  if (outside) hint.textContent = 'This brush came from another app, so it stays in My brushes and can\'t go in the free library.';
+  else if (!store.online) hint.textContent = 'Saved brushes stay on this device in this browser.';
   else if (!S.myId) hint.textContent = 'Sign in with Google to save your own brushes. They follow you to any device.';
   else if (S.canEdit) hint.textContent = 'My brushes are private to you. Add to free library shares a brush with everyone.';
   else hint.textContent = 'My brushes are private to you and follow you to any device.';
@@ -157,8 +162,14 @@ function cleanParams(p) {
   var r = P({}); p = p || {};
   SCHEMA.forEach(function (d) { var v = Number(p[d[0]]); if (isFinite(v)) r[d[0]] = clamp(Math.round(v), d[2], d[3]); });
   r.shape = SHAPES.some(function (s) { return s[0] === p.shape; }) ? p.shape : 'round';
+  // Image tips: a PNG data URL, small enough for a Firestore document.
+  if (typeof p.tip === 'string' && p.tip.indexOf('data:image/png;base64,') === 0 && p.tip.length <= 600000) r.tip = p.tip;
+  if (r.shape === 'image' && !r.tip) r.shape = 'round';
+  if (['painter', 'abr', 'image'].indexOf(p.src) >= 0) r.src = p.src;
   r.follow = !!p.follow; return r;
 }
+// Brushes brought in from other apps may belong to someone else, so they stay private: they can't go in the free library.
+function isImported(params) { return !!(params && params.src && params.src !== 'image'); }
 function exportBrushes() {
   if (!S.mine.length) { toast('You have no saved brushes to export yet.'); return; }
   var data = { app: 'sketchroom-brushes', version: 1, brushes: S.mine.map(function (c) { return { name: c.name, params: c.params }; }) };
@@ -167,16 +178,22 @@ function exportBrushes() {
 }
 async function importBrushes(file) {
   if (!file) return;
-  var data = null;
-  try { data = JSON.parse(await file.text()); } catch (e) { data = null; }
-  var list = data && Array.isArray(data.brushes) ? data.brushes : null;
-  if (!list || !list.length) { toast('That file has no Sketchroom brushes in it.'); return; }
-  list = list.slice(0, 100); var n = 0;
-  for (var i = 0; i < list.length; i++) {
-    var b = list[i] || {}, name = String(b.name || 'Brush').trim().slice(0, 40) || 'Brush';
-    try { await store.add(name, cleanParams(b.params), 'mine'); n++; } catch (e) { /* keep going with the rest */ }
+  toast('Reading ' + file.name + '…');
+  var list;
+  try { list = await readBrushFile(file); }
+  catch (e) {
+    var m = e && e.message || '';
+    toast(/unzip/.test(m) ? 'Could not load the unzip helper. Check your connection and try again.' : m.length > 30 ? m : 'That file could not be read as brushes.');
+    return;
   }
-  toast(n ? 'Imported ' + n + ' brush' + (n === 1 ? '' : 'es') + ' into My brushes.' : 'Could not import those brushes. Try again.');
+  var n = 0, lastId = null, last = null;
+  for (var i = 0; i < list.length; i++) {
+    try { lastId = await store.add(list[i].name, cleanParams(list[i].params), 'mine'); last = list[i]; n++; } catch (e) { /* keep going with the rest */ }
+  }
+  if (!n) { toast('Could not save those brushes. Try again.'); return; }
+  if (last) selectBrush(lastId, last.name, cleanParams(last.params));
+  var outside = list.some(function (b) { return isImported(b.params); });
+  toast('Imported ' + n + ' brush' + (n === 1 ? '' : 'es') + ' into My brushes.' + (outside ? ' Brushes from other apps are close copies: the tip shape comes across, but textures and some settings don\'t.' : ''));
 }
 function fillGrid(grid, list, emptyText) {
   grid.innerHTML = '';

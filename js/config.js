@@ -77,7 +77,8 @@ var SCHEMA = [
   ['sizeJitter', 'Size jitter', 0, 100, '%'], ['pressureSize', 'Pen pressure changes size', 0, 100, '%'],
   ['pressureOpacity', 'Pen pressure changes opacity', 0, 100, '%'], ['smoothing', 'Stroke smoothing', 0, 100, '%']
 ];
-var SHAPES = [['round', 'Round'], ['square', 'Square'], ['chalk', 'Chalk'], ['bristle', 'Bristle'], ['speckle', 'Speckle']];
+// 'image' only shows for brushes that carry a tip image (imported from another app or a picture).
+var SHAPES = [['round', 'Round'], ['square', 'Square'], ['chalk', 'Chalk'], ['bristle', 'Bristle'], ['speckle', 'Speckle'], ['image', 'Image tip']];
 var SWATCHES = ['#111418', '#3a3f47', '#6d7580', '#a5acb5', '#dfe3e8', '#ffffff', '#7a1f2b', '#c4342d', '#ef6a4c', '#f4a259', '#f6d365', '#d9e36a', '#2f6f3e', '#4fae6a', '#9bd9a0', '#0e6e72', '#2fb3b3', '#8fe0dc', '#1d3f8f', '#3a78d8', '#8db9f2', '#4a2b8c', '#8a5fd6', '#c7a8f0', '#8b2f6b', '#e2569b', '#f4a6c6', '#5b3a29', '#a36a42', '#e0b98f'];
 // Built-in fonts, all free Google Fonts under the SIL Open Font License, so they can be used in any artwork.
 // They load only when picked (loadFamily in text.js), so a long list costs nothing at startup.

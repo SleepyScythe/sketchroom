@@ -3,8 +3,32 @@
 'use strict';
 
 /* ---------- brush tips and stroke engine ---------- */
+// Image tips (brushes imported from other apps or pictures): b.tip is a PNG data URL, white with the shape in its alpha.
+// Images decode asynchronously, so the first use falls back to a soft round tip and the previews redraw once it's ready.
+var tipCache = {}, tipRedraw = 0;
+function tipImage(url) {
+  var t = tipCache[url];
+  if (t) return t.ready ? t.img : null;
+  t = tipCache[url] = { img: new Image(), ready: false };
+  t.img.onload = function () {
+    t.ready = true; clearTimeout(tipRedraw);
+    tipRedraw = setTimeout(function () { renderBrushes(); drawEdit(); }, 50);
+  };
+  t.img.src = url;
+  return null;
+}
 function makeTips(b, rgb, nominal) {
   var T = clamp(Math.ceil(nominal * 1.5), 8, 256), R = T / 2 - 1, rn = clamp(b.roundness, 8, 100) / 100;
+  var timg = b.shape === 'image' && b.tip ? tipImage(b.tip) : null;
+  if (timg) {
+    // Fit the image in the tip square, squash it by roundness, then color it through its alpha.
+    var tc = document.createElement('canvas'); tc.width = tc.height = T;
+    var tg = tc.getContext('2d'), k = (T - 2) / Math.max(timg.naturalWidth, timg.naturalHeight);
+    var w = timg.naturalWidth * k, h = timg.naturalHeight * k * rn;
+    tg.drawImage(timg, (T - w) / 2, (T - h) / 2, w, h);
+    tg.globalCompositeOperation = 'source-in'; tg.fillStyle = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')'; tg.fillRect(0, 0, T, T);
+    return [tc];
+  }
   var many = b.shape === 'chalk' || b.shape === 'bristle' || b.shape === 'speckle';
   var n = many ? 6 : 1, out = [];
   function col(a) { return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')'; }

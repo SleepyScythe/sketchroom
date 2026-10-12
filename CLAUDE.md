@@ -44,6 +44,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/files.js` | Saving the open image in IndexedDB (`saveDoc`, `idbGet/Put/Del`), `downloadBlob()`, PNG export (with a scale for pixel art), drawing files (`.sketchroom.json`), "Clear drawing" (`newDoc`) |
 | `js/document.js` | The open image (`S.doc`): `setDocSize()`, `applyDocMode()`, `useLayers()`, opening the quick sketch or a library image (`openSketch`, `openImage`), cloud saving (`cloudSave`, `leaveDoc`), thumbnails |
 | `js/library.js` | The homepage: cards, breadcrumbs, Create new (Image / Folder / Project / Import a file), Open / Rename / Move to… / Duplicate / Delete, the quick sketch banner, and the page addresses (`route()`) |
+| `js/importbrush.js` | `readBrushFile()`: Import brushes reads Sketchroom `.json`, `.brush` / `.brushset` (zip + `Brush.archive` binary plist + `Shape.png`), Photoshop `.abr` (sampled tips, v1/v2/v6, same layout GIMP reads) and PNG/JPG pictures. Includes a small bplist/NSKeyedArchiver reader and lazy-loads fflate for unzipping |
 | `js/profile.js` | Usernames and profiles (`needUsername`, `claimUsername`, the profile page `#/profile`, the Edit profile dialog), the contact form, and the owner's inbox |
 | `legal.html` | Terms of use, Privacy policy and Credits (with the Lucide/Feather license texts). Linked from the homepage footer and the profile page |
 | `LICENSE`, `THIRD_PARTY_NOTICES.md` | The owner's code is "all rights reserved". Third-party licenses (icons, fonts, Firebase) |
@@ -82,6 +83,14 @@ It was first built in Claude and published as a private artifact (https://claude
   - Zoom goes up to 64×. File > Export PNG, 8× bigger scales up with hard edges.
 - The document is in document pixels. Each layer is its own `<canvas>` inside `#stage`. Zoom and pan are a CSS transform on `#stage` (`S.view`), so drawing coordinates are converted with `docPos()`.
 - **Built-in brushes:** `PRESETS` in `config.js`, about 50 brushes, each with a `cat` from `BRUSH_CATS` (Sketching, Inking, Tattoo, Markers, Painting, Airbrush & spray, Lettering, Texture). The Brushes tab shows them grouped by category. Keep ids stable. Use `presetById()` rather than an index.
+- **Image tips and imported brushes:**
+  - **Tips:** a brush can carry `params.tip`, a PNG data URL (white, with the shape in alpha, at most 256 px), used when `params.shape === 'image'`. `makeTips` colors it through its alpha. Tips decode asynchronously through `tipImage()`, which redraws the previews once ready.
+  - **Source tag:** `params.src` records where a brush came from (`'painter'`, `'abr'` or `'image'`).
+  - **Privacy:** brushes from other apps (`isImported()`) can't be suggested or added to the free library, because they may belong to someone else.
+  - **Settings mapping:** `.brush` settings are mapped by best-guess key names (`maxSize`, `paintSize`, `plotSpacing`, `plotJitter`, `plotSmoothing`, `shapeRotation`, `shapeScatter`, `maxOpacity`, `dynamicsPressureSize`, `dynamicsPressureOpacity`, `dynamicsJitterSize`).
+  - **Not supported:** grain textures, dual brushes and other advanced settings.
+  - **iPad:** the import file input has no `accept` filter on purpose, because iPad greys out unknown extensions like `.brushset` otherwise.
+  - **Testing:** the readers were tested with files generated in the browser, not yet with real files from other apps.
 - **Built-in fonts:** `FONT_GROUPS` in `config.js` lists about 90 Google Fonts (tattoo and blackletter, stencil, script, graffiti, pixel and more). Only the two interface fonts are in the `<link>` in `index.html`. Text fonts load from Google Fonts the first time they are picked (`loadFamily`). Check that a family exists before adding it (`fonts.googleapis.com/css2?family=Name` must return 200). Families with no regular 400 weight, like UnifrakturCook, fail and can't be used.
 - **Usernames and profiles:**
   - Every account picks a username on first sign-in, with a random `artist1234` suggestion. Closing the box without picking keeps a random one, changeable later.
