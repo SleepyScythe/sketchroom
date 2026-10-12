@@ -211,7 +211,7 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 
 ## Known issues
 
-- **Pen pressure on the owner's iPad** (2026-10-12): the test pad showed a flat 0.12 for every point. The owner doesn't know which stylus they have, so it may have no pressure sensor (Apple Pencil USB-C, Logitech Crayon), or Safari may send stale values. Automatic mode now handles both cases (see "Pen pressure"). It's not yet confirmed on the iPad which source it settled on: the test pad's readout says.
+- **Pen pressure on the owner's iPad** (2026-10-12): the test pad showed a flat 0.12 for every point. The owner doesn't know which stylus they have, so it may have no pressure sensor (Apple Pencil USB-C, Logitech Crayon), or Safari may send stale values. Automatic mode now handles both cases (see "Pen pressure"). Confirmed on the iPad the same day: Automatic settled on `'speed'` (the readout said the pen has no pressure sensor), so the owner's stylus has no pressure sensor and their strokes use speed pressure.
 - Not tested on Android or on non-Apple styluses.
 - Large canvases with many layers use a lot of memory (each layer is w × h × 4 bytes, plus a full copy during each stroke for undo). The New image dialog warns above 9 megapixels.
 - Opening a library image always downloads every layer (no local cache once synced).
