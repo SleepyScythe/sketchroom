@@ -48,6 +48,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/profile.js` | Usernames and profiles (`needUsername`, `claimUsername`, the profile page `#/profile`, the Edit profile dialog), the contact form, and the owner's inbox |
 | `legal.html` | Terms of use, Privacy policy and Credits (with the Lucide/Feather license texts). Linked from the homepage footer and the profile page |
 | `LICENSE`, `THIRD_PARTY_NOTICES.md` | The owner's code is "all rights reserved". Third-party licenses (icons, fonts, Firebase) |
+| `js/landing.js` | The sample drawing sheet on the signed-out homepage (pencil, marker, ink, spray). Self-contained, nothing saved. Loads before `app.js` |
 | `js/app.js` | Event wiring (`wire()`), tabs, keyboard shortcuts, and `init()`. Must load last |
 | `firestore.rules`, `storage.rules` | Security rules for Firestore and Cloud Storage. Not deployed automatically: paste into the Firebase console when changed |
 | `tools/serve.ps1` | Tiny static server on http://localhost:8000 for local testing (`.claude/launch.json` runs it) |

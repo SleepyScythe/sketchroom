@@ -16,24 +16,57 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,600..800&family=Figtree:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 <div class="home" id="home" hidden>
   <header class="top">
-    <div class="brand"><span class="logo">Sketchroom</span></div>
+    <div class="brand"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M10 46c9-15 16-24 23-22s-2 15 5 17 9-9 16-18"/></svg><span class="logo">Sketchroom</span></div>
     <div class="top-actions" id="homeActions"></div>
   </header>
   <main class="homebody">
     <section class="signedout" id="homeSignedOut" hidden>
-      <h1>Your drawings, in one place</h1>
-      <p id="signedOutText">Sign in with Google to keep your images, folders and projects in your account and open them on any device.</p>
-      <div class="tools-row">
-        <button class="btn primary" id="homeSignIn">Sign in with Google</button>
-        <button class="btn" id="homeSketch">Quick sketch</button>
+      <div class="hero">
+        <div class="herotext">
+          <h1>Sketch, paint and make pixel art in your browser</h1>
+          <p class="lede">Pressure-aware brushes, layers, a brush editor and your own fonts. It works with a mouse, a finger or a pen.</p>
+          <p class="signintext" id="signedOutText">Sign in with Google to keep your images, folders and projects in your account and open them on any device.</p>
+          <div class="tools-row heroactions">
+            <button class="btn primary" id="homeSignIn">Sign in with Google</button>
+            <button class="btn" id="homeSketch">Quick sketch</button>
+          </div>
+          <p class="hint">A quick sketch stays in this browser only.</p>
+        </div>
+        <figure class="sheetfig">
+          <div class="sheet">
+            <canvas id="sheetCanvas" width="1000" height="720" role="img" aria-label="A sample sheet of paper. Draw on it with a mouse, finger or pen. Nothing you draw here is saved."></canvas>
+            <span class="sheethint" id="sheetHint" aria-hidden="true">Draw here</span>
+          </div>
+          <div class="tray" role="group" aria-label="Try a pen">
+            <div class="pens" id="sheetPens">
+              <button type="button" data-pen="pencil" aria-pressed="true">Pencil</button>
+              <button type="button" data-pen="marker" aria-pressed="false">Marker</button>
+              <button type="button" data-pen="ink" aria-pressed="false">Ink</button>
+              <button type="button" data-pen="spray" aria-pressed="false">Spray</button>
+            </div>
+            <div class="inks" id="sheetInks"></div>
+            <button type="button" class="btn sm" id="sheetClear">Clear sheet</button>
+          </div>
+          <figcaption class="hint">A sample sheet. Nothing drawn here is saved.</figcaption>
+        </figure>
       </div>
-      <p class="hint">A quick sketch stays in this browser only.</p>
+      <div class="room">
+        <h2>What's in the room</h2>
+        <dl class="roomlist">
+          <div><dt>Brushes</dt><dd>About 50 brushes, from pencils and inks to airbrush and texture. Open any brush in the editor, change it, and keep your version in My brushes. You can also import brushes you own.</dd></div>
+          <div><dt>Layers</dt><dd>Stack, hide, lock, merge and blend layers. Bring in a picture on a locked layer to trace it.</dd></div>
+          <div><dt>Pixel art</dt><dd>Start a tileset at the tile size you pick. The pencil, line, shapes and fill draw whole pixels, and you can export the result 8× bigger.</dd></div>
+          <div><dt>Type</dt><dd>Place text with about 90 free fonts, or upload a font file you are allowed to use.</dd></div>
+          <div><dt>Library</dt><dd>Images, folders and projects live in your account, so a drawing you start on an iPad is waiting on your laptop.</dd></div>
+          <div><dt>On your iPad</dt><dd>Use Share, then Add to Home Screen, and Sketchroom opens like an app.</dd></div>
+        </dl>
+      </div>
     </section>
     <section class="library" id="homeLibrary" hidden>
       <div class="homebar">
@@ -441,25 +474,26 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=10"></script>
-<script src="js/core.js?v=10"></script>
-<script src="js/config.js?v=10"></script>
-<script src="js/engine.js?v=10"></script>
-<script src="js/layers.js?v=10"></script>
-<script src="js/brushes.js?v=10"></script>
-<script src="js/importbrush.js?v=10"></script>
-<script src="js/storage.js?v=10"></script>
-<script src="js/text.js?v=10"></script>
-<script src="js/canvas.js?v=10"></script>
-<script src="js/color.js?v=10"></script>
-<script src="js/tools.js?v=10"></script>
-<script src="js/select.js?v=10"></script>
-<script src="js/pixel.js?v=10"></script>
-<script src="js/pad.js?v=10"></script>
-<script src="js/files.js?v=10"></script>
-<script src="js/document.js?v=10"></script>
-<script src="js/library.js?v=10"></script>
-<script src="js/profile.js?v=10"></script>
-<script src="js/app.js?v=10"></script>
+<script src="js/firebase-config.js?v=11"></script>
+<script src="js/core.js?v=11"></script>
+<script src="js/config.js?v=11"></script>
+<script src="js/engine.js?v=11"></script>
+<script src="js/layers.js?v=11"></script>
+<script src="js/brushes.js?v=11"></script>
+<script src="js/importbrush.js?v=11"></script>
+<script src="js/storage.js?v=11"></script>
+<script src="js/text.js?v=11"></script>
+<script src="js/canvas.js?v=11"></script>
+<script src="js/color.js?v=11"></script>
+<script src="js/tools.js?v=11"></script>
+<script src="js/select.js?v=11"></script>
+<script src="js/pixel.js?v=11"></script>
+<script src="js/pad.js?v=11"></script>
+<script src="js/files.js?v=11"></script>
+<script src="js/document.js?v=11"></script>
+<script src="js/library.js?v=11"></script>
+<script src="js/profile.js?v=11"></script>
+<script src="js/landing.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
 </body>
 </html>
