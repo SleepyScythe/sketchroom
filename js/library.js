@@ -109,10 +109,22 @@ function accountChanged() {
   renderHome(); if (!$('#home').hidden) checkSketch();
 }
 
+/* ---------- the background art (signed-in pages) ---------- */
+// Painted only when shown and when the window size changed, since the same settings always give the same picture.
+var bgPainted = '';
+function showLibraryBg(on) {
+  var cv = $('#libBg'), shade = $('#libShade'); cv.hidden = shade.hidden = !on;
+  if (!on || typeof paintBackground !== 'function') return;
+  var size = cv.clientWidth + 'x' + cv.clientHeight;
+  if (size === bgPainted || !cv.clientWidth) return;
+  bgPainted = size; paintBackground(cv, BG_LIBRARY); shade.style.opacity = String(BG_LIBRARY.shade / 100);
+}
+
 /* ---------- the homepage ---------- */
 function renderHome() {
   if ($('#home').hidden) return;
   var online = store.online, signed = online && !!S.myId, ready = signed && S.itemsReady, view = S.homeView || 'library';
+  showLibraryBg(signed);
   $('#homeSignedOut').hidden = signed; $('#homeLibrary').hidden = !ready || view !== 'library'; $('#homeLoading').hidden = !signed || ready;
   $('#homeProfile').hidden = !ready || view !== 'profile';
   $('#homeFriends').hidden = !ready || view !== 'friends';
@@ -368,4 +380,9 @@ function initLibrary() {
     $('#cardMenu').hidden = true; $('#createMenu').hidden = true; $('#createBtn').setAttribute('aria-expanded', 'false');
   });
   window.addEventListener('hashchange', route);
+  var bgTimer = 0;
+  window.addEventListener('resize', function () {
+    clearTimeout(bgTimer);
+    bgTimer = setTimeout(function () { if (!$('#home').hidden && !$('#libBg').hidden) showLibraryBg(true); }, 200);
+  });
 }

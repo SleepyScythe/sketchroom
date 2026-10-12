@@ -46,6 +46,8 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/library.js` | The homepage: cards, breadcrumbs, Create new (Image / Folder / Project / Import a file), Open / Rename / Move to… / Duplicate / Delete, the quick sketch banner, and the page addresses (`route()`) |
 | `js/importbrush.js` | `readBrushFile()`: Import brushes reads Sketchroom `.json`, `.brush` / `.brushset` (zip + `Brush.archive` binary plist + `Shape.png`), Photoshop `.abr` (sampled tips, v1/v2/v6, same layout GIMP reads) and PNG/JPG pictures. Includes a small bplist/NSKeyedArchiver reader and lazy-loads fflate for unzipping |
 | `js/profile.js` | Usernames and profiles (`needUsername`, `claimUsername`, the profile page `#/profile`, the Edit profile dialog), the contact form, and the owner's inbox |
+| `js/background.js` | The generated art behind the signed-in pages: `paintBackground(canvas, settings)`, its styles (`BG_PAINTERS`), and `BG_LIBRARY`, the settings the site uses. Self-contained, so the preview page can load it alone |
+| `tools/background-preview.html` | Not linked from the site. A pretend library with an edit panel for the background art; open http://localhost:8000/tools/background-preview.html. It starts from `BG_LIBRARY`, and the current settings are in `window.bgSettings` |
 | `js/friends.js` | Friends: requests, the friends page `#/friends`, a friend's view-only library `#/u/<uid>` and the image viewer (`showFriendImage`, which draws the visible layers onto one canvas) |
 | `legal.html` | Terms of use, Privacy policy and Credits (with the Lucide/Feather license texts). Linked from the homepage footer and the profile page |
 | `LICENSE`, `THIRD_PARTY_NOTICES.md` | The owner's code is "all rights reserved". Third-party licenses (icons, fonts, Firebase) |
@@ -87,6 +89,12 @@ It was first built in Claude and published as a private artifact (https://claude
   - `#grid` is a screen-sized canvas over the viewport that draws tile lines, plus pixel lines from 8× zoom, redrawn on every `applyView()`.
   - Zoom goes up to 64×. File > Export PNG, 8× bigger scales up with hard edges.
 - The document is in document pixels. Each layer is its own `<canvas>` inside `#stage`. Zoom and pan are a CSS transform on `#stage` (`S.view`), so drawing coordinates are converted with `docPos()`.
+- **Background art** (2026-10-12): signed in, every homepage view (library, profile, friends, a friend's library) has generated art behind it.
+  - **How it's drawn:** a fixed `#libBg` canvas painted by `paintBackground(…, BG_LIBRARY)`, under `#libShade` (the page color at `shade` %, so it works in dark and light mode).
+  - **When it repaints:** `showLibraryBg()` in `library.js` only repaints when the window size changes. The seed makes it the same picture every time.
+  - **Not shown:** on the signed-out landing page or in the editor.
+  - **Current settings:** the owner picked them in the preview: flow strokes, all ten theme colors, everything at 100, around the edges, shade 35, seed 68199.
+  - **Changing it:** pick new settings in `tools/background-preview.html`, read `window.bgSettings` from that page, and copy them into `BG_LIBRARY`.
 - **Built-in brushes:** `PRESETS` in `config.js`, about 50 brushes, each with a `cat` from `BRUSH_CATS` (Sketching, Inking, Tattoo, Markers, Painting, Airbrush & spray, Lettering, Texture). The Brushes tab shows them grouped by category. Keep ids stable. Use `presetById()` rather than an index.
 - **Image tips and imported brushes:**
   - **Tips:** a brush can carry `params.tip`, a PNG data URL (white, with the shape in alpha, at most 256 px), used when `params.shape === 'image'`. `makeTips` colors it through its alpha. Tips decode asynchronously through `tipImage()`, which redraws the previews once ready.
