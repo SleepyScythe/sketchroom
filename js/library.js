@@ -37,6 +37,7 @@ function parseRoute(h) {
   var m;
   if ((m = /^#\/d\/([A-Za-z0-9]+)$/.exec(h))) return { kind: 'image', id: m[1] };
   if (h === '#/sketch') return { kind: 'sketch' };
+  if (h === '#/profile') return { kind: 'profile' };
   if ((m = /^#\/c\/([A-Za-z0-9]+)$/.exec(h))) return { kind: 'home', id: m[1] };
   return { kind: 'home', id: '' };
 }
@@ -65,7 +66,8 @@ async function route() {
     showView('editor'); if (!same) await openImage(r.id, t);
     return;
   }
-  S.homeAt = r.id; showView('home'); renderHome(); checkSketch();
+  S.homeView = r.kind === 'profile' ? 'profile' : 'library';
+  S.homeAt = r.kind === 'profile' ? '' : r.id; showView('home'); renderHome(); checkSketch();
 }
 // Signing in or out: an open library image can't stay open signed out.
 function accountChanged() {
@@ -76,8 +78,10 @@ function accountChanged() {
 /* ---------- the homepage ---------- */
 function renderHome() {
   if ($('#home').hidden) return;
-  var online = store.online, signed = online && !!S.myId, ready = signed && S.itemsReady;
-  $('#homeSignedOut').hidden = signed; $('#homeLibrary').hidden = !ready; $('#homeLoading').hidden = !signed || ready;
+  var online = store.online, signed = online && !!S.myId, ready = signed && S.itemsReady, prof = S.homeView === 'profile';
+  $('#homeSignedOut').hidden = signed; $('#homeLibrary').hidden = !ready || prof; $('#homeLoading').hidden = !signed || ready;
+  $('#homeProfile').hidden = !ready || !prof;
+  if (ready && prof) { renderProfile(); return; }
   $('#homeSignIn').hidden = !online;
   $('#signedOutText').textContent = online
     ? 'Sign in with Google to keep your images, folders and projects in your account and open them on any device.'

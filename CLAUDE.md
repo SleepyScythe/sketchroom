@@ -1,6 +1,6 @@
 # Sketchroom
 
-A Procreate-style drawing web app for the owner and beta testers. It has:
+A drawing web app in the style of tablet painting apps, for the owner and beta testers. It has:
 - a homepage library of images, folders and projects, saved in each user's account
 - a chosen canvas size for each image, and pixel-art tilesets with crisp pixel tools
 - pressure-aware brushes and a brush editor
@@ -44,6 +44,9 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/files.js` | Saving the open image in IndexedDB (`saveDoc`, `idbGet/Put/Del`), `downloadBlob()`, PNG export (with a scale for pixel art), drawing files (`.sketchroom.json`), "Clear drawing" (`newDoc`) |
 | `js/document.js` | The open image (`S.doc`): `setDocSize()`, `applyDocMode()`, `useLayers()`, opening the quick sketch or a library image (`openSketch`, `openImage`), cloud saving (`cloudSave`, `leaveDoc`), thumbnails |
 | `js/library.js` | The homepage: cards, breadcrumbs, Create new (Image / Folder / Project / Import a file), Open / Rename / Move to… / Duplicate / Delete, the quick sketch banner, and the page addresses (`route()`) |
+| `js/profile.js` | Usernames and profiles (`needUsername`, `claimUsername`, the profile page `#/profile`, the Edit profile dialog), the contact form, and the owner's inbox |
+| `legal.html` | Terms of use, Privacy policy and Credits (with the Lucide/Feather license texts). Linked from the homepage footer and the profile page |
+| `LICENSE`, `THIRD_PARTY_NOTICES.md` | The owner's code is "all rights reserved". Third-party licenses (icons, fonts, Firebase) |
 | `js/app.js` | Event wiring (`wire()`), tabs, keyboard shortcuts, and `init()`. Must load last |
 | `firestore.rules`, `storage.rules` | Security rules for Firestore and Cloud Storage. Not deployed automatically: paste into the Firebase console when changed |
 | `tools/serve.ps1` | Tiny static server on http://localhost:8000 for local testing (`.claude/launch.json` runs it) |
@@ -78,6 +81,14 @@ It was first built in Claude and published as a private artifact (https://claude
   - `#grid` is a screen-sized canvas over the viewport that draws tile lines, plus pixel lines from 8× zoom, redrawn on every `applyView()`.
   - Zoom goes up to 64×. File > Export PNG, 8× bigger scales up with hard edges.
 - The document is in document pixels. Each layer is its own `<canvas>` inside `#stage`. Zoom and pan are a CSS transform on `#stage` (`S.view`), so drawing coordinates are converted with `docPos()`.
+- **Built-in brushes:** `PRESETS` in `config.js`, about 50 brushes, each with a `cat` from `BRUSH_CATS` (Sketching, Inking, Tattoo, Markers, Painting, Airbrush & spray, Lettering, Texture). The Brushes tab shows them grouped by category. Keep ids stable. Use `presetById()` rather than an index.
+- **Built-in fonts:** `FONT_GROUPS` in `config.js` lists about 90 Google Fonts (tattoo and blackletter, stencil, script, graffiti, pixel and more). Only the two interface fonts are in the `<link>` in `index.html`. Text fonts load from Google Fonts the first time they are picked (`loadFamily`). Check that a family exists before adding it (`fonts.googleapis.com/css2?family=Name` must return 200). Families with no regular 400 weight, like UnifrakturCook, fail and can't be used.
+- **Usernames and profiles:**
+  - Every account picks a username on first sign-in, with a random `artist1234` suggestion. Closing the box without picking keeps a random one, changeable later.
+  - Other people only ever see the username, never the Google name or email: the account button, brush suggestions (`byName: '@username'`) and contact messages all use it.
+  - Profile fields: display name, pronouns, location, bio, up to 3 links (https only), a 160 px picture stored as a data URL in the profile, and a color.
+  - The profile page also shows counts, the account box (the email, visible only to the user) and, for admins, the inbox.
+- **Contact form:** writes to `messages`. Only admins read them, in the inbox on their profile page. An unread message adds a dot to the account button.
 - Brush settings live in one object (keys in `BASE` and `SCHEMA` in `config.js`). Saved brushes are `{ name, params, at }`, plus `by` (the admin's uid) in the free library, and each carries `where` (`'library'` or `'mine'`) in the app.
 - A stroke: `Engine` stamps a pre-rendered tip along the path at `spacing`. Brushes draw into the separate `buffer` canvas shown above the active layer at the brush's opacity, then composite onto the layer when the pen lifts. The eraser draws straight onto the layer with `destination-out`. `Engine.stamp()` spreads alpha across overlapping stamps (`this.norm`), so Flow and pen pressure show.
 - Undo: each stroke stores before/after crops of its bounding box, and layer operations store closures. History is capped at 80 entries and resets when another image opens.
@@ -114,6 +125,9 @@ It was first built in Claude and published as a private artifact (https://claude
   - `users/{uid}/uploadedFonts/{id}`: uploaded font files `{ family, data (base64), at }`, 700 KB max.
   - `users/{uid}/items/{id}`: the library (see "How it works").
   - `requests/{uid}_{brushId}`: a tester's suggestion for the free library. Admins Add or Decline it in the Brushes tab.
+  - `profiles/{uid}`: the public profile `{ username, displayName, bio, pronouns, location, links, avatar, color, joined, updated }`. Any signed-in person can read it, and only its owner can write it.
+  - `usernames/{name}`: `{ uid }` reserves a username. It is create-only. `store.saveProfile` writes the profile and the new name, and deletes the old name, in one batch, and the rules check both sides with `getAfter`, so names are unique.
+  - `messages/{id}`: contact form messages `{ uid, username, topic, text, contact, at, read }`. Any signed-in person can create one, and only admins can read, update `read`, or delete.
   - `admins/{uid}`: marks an admin (`S.canEdit`).
 - **Making someone an admin:** they sign in once. In Firebase console > Authentication > Users, copy their User UID. In Firestore > Data, add a document with that UID as its ID to the `admins` collection, with any field (for example `note: "owner"`). Only the console can write `admins`.
 - **Security rules:** `firestore.rules` and `storage.rules`. After editing one, paste it into Firebase console > Firestore Database > Rules (or Storage > Rules) and press Publish.
@@ -142,6 +156,13 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 - The `[hidden]` rule at the top of `styles.css` is needed: without it, elements styled with `display: flex` ignore the `hidden` attribute.
 - Pointer code must keep `touch-action: none` on the canvas area and handle `pointercancel`.
 - Anything that changes a layer's pixels must leave `L.dirty = true` (`recordCrop` and `restore` do), or the change won't reach the cloud.
+- **Copyright care** (the owner can't afford legal trouble):
+  - Don't use another app's name, logo, icons, artwork or exact brush names, anywhere in the site or the public repo.
+  - Brush names stay generic, describing real-world tools.
+  - Only use fonts with open licenses (Google Fonts).
+  - Icons based on Lucide or Feather must keep their credit in `legal.html` and `THIRD_PARTY_NOTICES.md`.
+  - Any new third-party code or asset gets its license added to both.
+  - If the site starts collecting new kinds of personal data, update the Privacy section of `legal.html` (and its date).
 
 ## Known issues
 
@@ -152,11 +173,11 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 
 ## Ideas the owner may want next
 
-- Painting limited to the inside of a selection (as in Procreate). Today a selection only moves or deletes pixels, and switching tools drops it.
+- Painting limited to the inside of a selection (as in other tablet painting apps). Today a selection only moves or deletes pixels, and switching tools drops it.
 - Transform for a selection (scale and rotate), not just move.
 - Pixel art extras: tile preview (see a tile repeated), symmetry or mirror drawing, an indexed palette, exporting each tile as its own PNG.
 - **Next up (owner, 2026-10-11):**
-  - **Usernames:** everyone picks their own username, shown instead of their Google name.
+  - **Usernames:** done 2026-10-12, with profiles (see "How it works").
   - **Friends list:** friends can see each other's library, unless an item is set to private. This needs:
     - a profile collection with unique usernames
     - friend requests and acceptance

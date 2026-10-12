@@ -16,8 +16,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&family=Caveat&family=Permanent+Marker&family=Pacifico&family=Bebas+Neue&family=Playfair+Display&family=Lobster&family=Press+Start+2P&family=Special+Elite&family=Abril+Fatface&family=Cinzel&family=Shadows+Into+Light&family=Oswald&family=Indie+Flower&family=Dancing+Script&family=Righteous&family=Bangers&family=Amatic+SC&family=Rock+Salt&family=Satisfy&family=Anton&family=Archivo+Black&family=Monoton&family=Cormorant+Garamond&family=DM+Serif+Display&family=Syne&family=Space+Mono&display=swap">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 <div class="home" id="home" hidden>
@@ -57,7 +57,38 @@
       <div class="hgrid" id="homeGrid"></div>
       <p class="homeempty" id="homeEmpty" hidden></p>
     </section>
+    <section class="profilepage" id="homeProfile" hidden>
+      <nav class="crumbs" aria-label="Where you are"><a href="#/">Library</a><span class="crumbsep">›</span><span aria-current="page">Profile</span></nav>
+      <div class="pcard">
+        <div class="pbanner" id="pBanner"></div>
+        <div class="phead">
+          <div id="pAvatarHost"></div>
+          <div class="pnames"><h1 id="pDisplay"></h1><span id="pUser"></span></div>
+          <button class="btn" id="pEdit">Edit profile</button>
+        </div>
+        <p class="pmeta" id="pMeta"></p>
+        <p class="pbio" id="pBio" hidden></p>
+        <div class="plinks" id="pLinks"></div>
+        <div class="pstats" id="pStats"></div>
+      </div>
+      <div class="pbox">
+        <h3>Your account</h3>
+        <p class="hint" id="pAccount"></p>
+        <div class="tools-row">
+          <button class="btn" data-contact="bug">Contact the owner</button>
+          <a class="btn" href="legal.html">Terms and privacy</a>
+          <button class="btn" id="pSignOut">Sign out</button>
+        </div>
+      </div>
+      <div class="pbox" id="pInboxBox" hidden>
+        <h3 id="pInboxTitle">Inbox</h3>
+        <div class="inbox" id="pInbox"></div>
+      </div>
+    </section>
     <p class="homeempty" id="homeLoading" hidden>Loading your library…</p>
+    <footer class="homefoot">
+      <a href="legal.html#terms">Terms</a><a href="legal.html#privacy">Privacy</a><a href="legal.html#credits">Credits</a><a href="#/profile" data-contact="other">Contact</a>
+    </footer>
   </main>
   <div class="menu cardmenu" id="cardMenu" hidden>
     <button id="cmOpen">Open</button>
@@ -123,6 +154,63 @@
   </form>
 </dialog>
 
+<dialog class="dlg" id="dlgUsername" aria-labelledby="dlgUsernameTitle">
+  <form id="formUsername">
+    <h2 id="dlgUsernameTitle">Pick a username</h2>
+    <p class="hint">This is the name other people see, instead of your Google name. You can change it any time on your profile page.</p>
+    <label class="field">Username<input type="text" id="unameInput" maxlength="21" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+    <p class="hint">3 to 20 lowercase letters, numbers, dots or underscores.</p>
+    <p class="formerror" id="unameError" role="alert"></p>
+    <div class="tools-row dlgbtns"><button type="button" class="btn" data-close>Later</button><button class="btn primary" id="unameOk">Use this name</button></div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="dlgProfile" aria-labelledby="dlgProfileTitle">
+  <form id="formProfile">
+    <h2 id="dlgProfileTitle">Edit profile</h2>
+    <div class="peavatar">
+      <div id="peAvatar"></div>
+      <div class="tools-row"><button type="button" class="btn sm" id="pePic">Choose picture</button><button type="button" class="btn sm" id="peRemovePic">Remove</button></div>
+      <input type="file" id="pePicFile" accept="image/*" hidden>
+    </div>
+    <div class="palette mini" id="peColors" aria-label="Profile color"></div>
+    <label class="field">Username<input type="text" id="peUser" maxlength="21" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+    <label class="field">Display name (optional)<input type="text" id="peName" maxlength="40"></label>
+    <div class="inline">
+      <label class="field">Pronouns (optional)<input type="text" id="pePronouns" maxlength="24"></label>
+      <label class="field">Location (optional)<input type="text" id="peLocation" maxlength="40"></label>
+    </div>
+    <label class="field">Bio <span id="peBioCount" class="count"></span><textarea id="peBio" maxlength="200" rows="3"></textarea></label>
+    <label class="field">Links (optional, e.g. your Instagram or portfolio)
+      <input type="text" id="peLink0" maxlength="120" placeholder="instagram.com/yourname">
+      <input type="text" id="peLink1" maxlength="120">
+      <input type="text" id="peLink2" maxlength="120">
+    </label>
+    <p class="hint">Don't put your email, phone number or home address here: other signed-in people can see your profile.</p>
+    <p class="formerror" id="peError" role="alert"></p>
+    <div class="tools-row dlgbtns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" id="peSave">Save</button></div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="dlgContact" aria-labelledby="dlgContactTitle">
+  <form id="formContact">
+    <h2 id="dlgContactTitle">Contact the owner</h2>
+    <label class="field">About
+      <select id="ctTopic">
+        <option value="report">Report content or copyright</option>
+        <option value="privacy">Privacy or deleting my data</option>
+        <option value="bug">Bug or feedback</option>
+        <option value="other">Something else</option>
+      </select>
+    </label>
+    <label class="field">Message<textarea id="ctText" maxlength="2000" rows="6"></textarea></label>
+    <label class="field">How to reach you back (optional)<input type="text" id="ctReply" maxlength="120" placeholder="Only if you want a reply outside the site"></label>
+    <p class="hint">Only the site owner can read messages. Your username is sent with it.</p>
+    <p class="formerror" id="ctError" role="alert"></p>
+    <div class="tools-row dlgbtns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" id="ctSend">Send</button></div>
+  </form>
+</dialog>
+
 <div class="app" id="editor" hidden>
   <header class="top">
     <div class="brand">
@@ -154,6 +242,7 @@
         <button class="btn account" id="accountBtn" aria-haspopup="true" aria-expanded="false">Sign in</button>
         <div class="menu" id="accountMenu" hidden>
           <span class="menu-note" id="accountName"></span>
+          <button id="myProfile">My profile</button>
           <button id="signOut">Sign out</button>
         </div>
       </div>
@@ -221,7 +310,7 @@
           <div class="bgrid" id="requestGrid"></div>
         </div>
         <h3>Free brushes</h3>
-        <div class="bgrid" id="freeGrid"></div>
+        <div class="freegroups" id="freeGrid"></div>
         <h3>My brushes</h3>
         <div class="bgrid" id="mineGrid"></div>
         <p class="hint">Tweak any brush in the Edit tab, then save it to My brushes.</p>
@@ -348,23 +437,24 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=6"></script>
-<script src="js/core.js?v=6"></script>
-<script src="js/config.js?v=6"></script>
-<script src="js/engine.js?v=6"></script>
-<script src="js/layers.js?v=6"></script>
-<script src="js/brushes.js?v=6"></script>
-<script src="js/storage.js?v=7"></script>
-<script src="js/text.js?v=6"></script>
-<script src="js/canvas.js?v=6"></script>
-<script src="js/color.js?v=6"></script>
-<script src="js/tools.js?v=6"></script>
-<script src="js/select.js?v=6"></script>
-<script src="js/pixel.js?v=6"></script>
-<script src="js/pad.js?v=6"></script>
-<script src="js/files.js?v=6"></script>
-<script src="js/document.js?v=6"></script>
-<script src="js/library.js?v=6"></script>
-<script src="js/app.js?v=6"></script>
+<script src="js/firebase-config.js?v=8"></script>
+<script src="js/core.js?v=8"></script>
+<script src="js/config.js?v=8"></script>
+<script src="js/engine.js?v=8"></script>
+<script src="js/layers.js?v=8"></script>
+<script src="js/brushes.js?v=8"></script>
+<script src="js/storage.js?v=8"></script>
+<script src="js/text.js?v=8"></script>
+<script src="js/canvas.js?v=8"></script>
+<script src="js/color.js?v=8"></script>
+<script src="js/tools.js?v=8"></script>
+<script src="js/select.js?v=8"></script>
+<script src="js/pixel.js?v=8"></script>
+<script src="js/pad.js?v=8"></script>
+<script src="js/files.js?v=8"></script>
+<script src="js/document.js?v=8"></script>
+<script src="js/library.js?v=8"></script>
+<script src="js/profile.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

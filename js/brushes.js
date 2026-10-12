@@ -111,10 +111,19 @@ function makeCard(id, name, params, c) {
   return d;
 }
 function renderBrushes() {
-  // Free brushes: the built-in presets, then any brushes an admin added to the free library.
+  // Free brushes: the built-in presets grouped by art style, then any brushes an admin added to the free library.
   var fg = $('#freeGrid'); fg.innerHTML = '';
-  PRESETS.forEach(function (p) { fg.appendChild(makeCard(p.id, p.name, p.p, null)); });
-  S.library.forEach(function (c) { fg.appendChild(makeCard(c.id, c.name, c.params, c)); });
+  var section = function (title, cards) {
+    if (!cards.length) return;
+    var h = document.createElement('h4'); h.className = 'bcat'; h.textContent = title;
+    var grid = document.createElement('div'); grid.className = 'bgrid';
+    cards.forEach(function (c) { grid.appendChild(c); });
+    fg.append(h, grid);
+  };
+  BRUSH_CATS.forEach(function (cat) {
+    section(cat, PRESETS.filter(function (p) { return p.cat === cat; }).map(function (p) { return makeCard(p.id, p.name, p.p, null); }));
+  });
+  section('Added by the owner', S.library.map(function (c) { return makeCard(c.id, c.name, c.params, c); }));
   fillGrid($('#mineGrid'), S.mine, store.online && !S.myId ? 'Sign in to save your own brushes.' : 'No saved brushes yet. Open the Edit tab, shape a brush and press Save to my brushes.');
   renderRequests();
   markSelected(); updateEditorButtons();

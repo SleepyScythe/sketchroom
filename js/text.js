@@ -3,8 +3,7 @@
 'use strict';
 
 /* ---------- fonts ---------- */
-var loadedFamilies = {};
-BUILTIN_FONTS.forEach(function (f) { loadedFamilies[f] = true; });
+var loadedFamilies = {}; // fonts load from Google Fonts the first time they are picked
 function loadFamily(family) {
   return new Promise(function (res, rej) {
     if (loadedFamilies[family]) { res(); return; }
@@ -27,7 +26,7 @@ function rebuildFonts() {
     list.forEach(function (f) { var o = document.createElement('option'); o.value = f; o.textContent = f; g.appendChild(o); });
     sel.appendChild(g);
   };
-  group('Built in', BUILTIN_FONTS);
+  FONT_GROUPS.forEach(function (g) { group(g[0], g[1]); });
   var free = S.sharedFonts.filter(function (f) { return BUILTIN_FONTS.indexOf(f) < 0; });
   var mine = S.myFonts.filter(function (f) { return BUILTIN_FONTS.indexOf(f) < 0 && free.indexOf(f) < 0; });
   group('Free library', free);

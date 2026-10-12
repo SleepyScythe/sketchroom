@@ -170,11 +170,11 @@ function wire() {
 /* ---------- start ---------- */
 async function init() {
   var L = makeLayer('Layer ' + (++layerCount)); S.layers.push(L); S.active = L; renderStack();
-  buildSliders(); wire(); initPad(); initColor(); initTools(); initLibrary();
+  buildSliders(); wire(); initPad(); initColor(); initTools(); initLibrary(); initProfile();
   setTool('brush');
   // Installable app: the service worker lets the app open offline. It always tries the network first, so updates show up.
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(function () { /* optional */ });
-  selectBrush('pen', 'Technical Pen', PRESETS[1].p);
+  var first = presetById('pen'); selectBrush(first.id, first.name, first.p);
   renderBrushes(); renderLayers(); rebuildFonts(); updateHist();
   initStore();
   // The first page depends on whether someone is signed in. Don't wait forever if Firebase is slow.

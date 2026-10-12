@@ -83,6 +83,49 @@ service cloud.firestore {
         && request.resource.data.at is number;
       allow delete: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
     }
+    // Profiles: readable by signed-in people, written only by their owner, and the username must be reserved for them
+    // in usernames/{name} by the same batch (getAfter sees the batch's result).
+    function validProfile(d) {
+      return d.keys().hasOnly(['username', 'displayName', 'bio', 'pronouns', 'location', 'links', 'avatar', 'color', 'joined', 'updated'])
+        && d.username is string && d.username.matches('^[a-z0-9_.]{3,20}$')
+        && d.displayName is string && d.displayName.size() <= 40
+        && d.bio is string && d.bio.size() <= 200
+        && d.pronouns is string && d.pronouns.size() <= 24
+        && d.location is string && d.location.size() <= 40
+        && d.links is list && d.links.size() <= 3
+        && d.avatar is string && d.avatar.size() <= 80000
+        && d.color is string && d.color.size() <= 7
+        && d.joined is number && d.updated is number;
+    }
+    match /profiles/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isUser(uid) && validProfile(request.resource.data)
+        && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid;
+      allow delete: if isUser(uid);
+    }
+    // usernames/{name} = { uid }. Create only (a taken name can't be overwritten), and only for the name in your own profile.
+    match /usernames/{name} {
+      allow read: if signedIn();
+      allow create: if signedIn() && name.matches('^[a-z0-9_.]{3,20}$')
+        && request.resource.data.keys().hasOnly(['uid']) && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username == name;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid
+        && (!existsAfter(/databases/$(database)/documents/profiles/$(request.auth.uid))
+            || getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username != name);
+    }
+    // The contact form. Any signed-in person can send; only admins can read, mark read or delete.
+    match /messages/{id} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'topic', 'text', 'contact', 'at', 'read'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username is string && request.resource.data.username.size() <= 20
+        && request.resource.data.topic in ['report', 'privacy', 'bug', 'other']
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.contact is string && request.resource.data.contact.size() <= 120
+        && request.resource.data.at is number && request.resource.data.read == false;
+      allow read, delete: if isAdmin();
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
     match /admins/{uid} {
       allow read: if isUser(uid);
     }

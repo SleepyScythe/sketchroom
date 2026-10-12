@@ -86,9 +86,27 @@ async function initStore() {
   // Suggestions for the free library: requests/{uid}_{brushId}. Admins add or decline them.
   store.requestShare = async function (item) {
     var u = auth.currentUser; if (!u) throw new Error('signed out');
-    // byName is the Google display name only, never the email (S.myName falls back to the email for on-screen use).
-    await db.collection('requests').doc(u.uid + '_' + item.id).set({ name: item.name, params: item.params, at: Date.now(), by: u.uid, byName: (u.displayName || 'A tester').slice(0, 80), brushId: item.id });
+    // byName is the username, never the Google name or email.
+    await db.collection('requests').doc(u.uid + '_' + item.id).set({ name: item.name, params: item.params, at: Date.now(), by: u.uid, byName: S.profile ? '@' + S.profile.username : 'A tester', brushId: item.id });
   };
+  // Profiles and usernames. usernames/{name} = { uid } reserves a name. Changing it moves the reservation in one batch,
+  // and the rules check both documents together, so two people can never hold the same name.
+  store.saveProfile = async function (p, oldName) {
+    var me = auth.currentUser.uid, b = db.batch();
+    b.set(db.collection('profiles').doc(me), p);
+    if (p.username !== oldName) {
+      b.set(db.collection('usernames').doc(p.username), { uid: me });
+      if (oldName) b.delete(db.collection('usernames').doc(oldName));
+    }
+    await b.commit();
+  };
+  // Only ever shown to the signed-in person themselves.
+  store.myEmail = function () { return (auth.currentUser && auth.currentUser.email) || ''; };
+  store.usernameOwner = async function (name) { var d = await db.collection('usernames').doc(name).get(); return d.exists ? (d.data() || {}).uid : null; };
+  // The contact form. Only admins can read messages.
+  store.sendMessage = async function (m) { await db.collection('messages').doc(uid() + uid()).set(m); };
+  store.markMessage = async function (id, read) { await db.collection('messages').doc(id).update({ read: read }); };
+  store.deleteMessage = async function (id) { await db.collection('messages').doc(id).delete(); };
   // The drawing library. Items are kept in S.items by the listener below.
   store.createItem = async function (data) { var id = uid() + uid(); await home().collection('items').doc(id).set(data); return id; };
   store.updateItem = async function (id, patch) { await home().collection('items').doc(id).update(patch); };
@@ -133,7 +151,7 @@ async function initStore() {
     }
     S.myId = user ? user.uid : null;
     S.myName = user ? (user.displayName || user.email || 'You') : '';
-    S.canEdit = false; S.mine = []; S.myFonts = []; S.requests = []; S.myRequests = []; S.uploadedFonts = [];
+    S.canEdit = false; S.mine = []; S.myFonts = []; S.requests = []; S.myRequests = []; S.uploadedFonts = []; S.profile = null; S.messages = [];
     if (user) {
       var mine = db.collection('users').doc(user.uid);
       try { S.canEdit = (await db.collection('admins').doc(user.uid).get()).exists; } catch (e) { S.canEdit = false; }
@@ -159,6 +177,18 @@ async function initStore() {
         }
         S.uploadedFonts = fams; rebuildFonts(); renderUploadedFonts();
       }, function () { /* uploaded fonts are optional */ }));
+      unsub.push(db.collection('profiles').doc(user.uid).onSnapshot(function (snap) {
+        S.profile = snap.exists ? snap.data() : null;
+        // A new account picks a username first. Only when the server says there is no profile, never from an offline cache miss.
+        if (!snap.exists && !snap.metadata.fromCache) needUsername();
+        renderAccount(); renderProfile();
+      }, function () { /* the profile is optional */ }));
+      if (S.canEdit) {
+        unsub.push(db.collection('messages').orderBy('at', 'desc').limit(200).onSnapshot(function (snap) {
+          S.messages = snap.docs.map(function (d) { var v = d.data() || {}; v.id = d.id; return v; });
+          renderAccount(); renderProfile();
+        }, function () { /* the inbox is optional */ }));
+      }
       var reqs = db.collection('requests');
       if (S.canEdit) {
         unsub.push(reqs.orderBy('at', 'asc').limit(100).onSnapshot(function (snap) {
@@ -179,12 +209,14 @@ async function initStore() {
 }
 
 /* ---------- account button ---------- */
+// Shows the username, never the Google name, so it's the same name everyone else sees.
 function renderAccount() {
   $('#accountWrap').hidden = !store.online;
-  var btn = $('#accountBtn');
-  btn.textContent = S.myId ? S.myName.split(' ')[0] : 'Sign in';
-  btn.title = S.myId ? 'Signed in as ' + S.myName : 'Sign in with Google to save your own brushes';
+  var btn = $('#accountBtn'), handle = S.profile ? '@' + S.profile.username : 'Account';
+  var unread = S.canEdit ? S.messages.filter(function (m) { return !m.read; }).length : 0;
+  btn.textContent = S.myId ? handle + (unread ? ' •' : '') : 'Sign in';
+  btn.title = S.myId ? 'Signed in as ' + handle + (unread ? '. ' + unread + ' unread message' + (unread === 1 ? '' : 's') : '') : 'Sign in with Google to save your own brushes';
   btn.classList.toggle('primary', !S.myId);
-  $('#accountName').textContent = S.myId ? S.myName + (S.canEdit ? ' (owner)' : '') : '';
+  $('#accountName').textContent = S.myId ? handle + (S.canEdit ? ' (owner)' : '') : '';
   if (!S.myId) $('#accountMenu').hidden = true;
 }
