@@ -60,12 +60,49 @@ service cloud.firestore {
         && request.resource.data.colors is list && request.resource.data.colors.size() <= 60
         && request.resource.data.at is number;
     }
+    // Drawing together: shares/{owner}_{imageId} = { owner, image, members, name, at }. Members are up to 5 of the owner's
+    // friends (checked one by one, since rules have no loops). Members can open that image, draw on it and save it.
+    function isMyFriend(m) { return exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(m)); }
+    function friendsOk(ms) {
+      return (ms.size() < 1 || isMyFriend(ms[0])) && (ms.size() < 2 || isMyFriend(ms[1])) && (ms.size() < 3 || isMyFriend(ms[2]))
+        && (ms.size() < 4 || isMyFriend(ms[3])) && (ms.size() < 5 || isMyFriend(ms[4]));
+    }
+    function isShareMember(sid) {
+      let s = get(/databases/$(database)/documents/shares/$(sid)).data;
+      return signedIn() && (s.owner == request.auth.uid || request.auth.uid in s.members);
+    }
     // The library: projects, folders and images. An image's layer PNGs are in Cloud Storage (see storage.rules).
     // Friends can read items whose private flag is false (their queries must ask for private == false).
+    // People an image is shared with can read it and save their drawing into it (layers, thumbnail and these only).
     match /users/{uid}/items/{id} {
-      allow read: if isUser(uid) || (isFriendOf(uid) && resource.data.private == false);
+      allow read: if isUser(uid) || (isFriendOf(uid) && resource.data.private == false) || isShareMember(uid + '_' + id);
       allow delete: if isUser(uid);
-      allow create, update: if isUser(uid) && validItem(request.resource.data);
+      allow create: if isUser(uid) && validItem(request.resource.data);
+      allow update: if validItem(request.resource.data) && (isUser(uid)
+        || (isShareMember(uid + '_' + id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['layers', 'active', 'count', 'thumb', 'updated'])));
+    }
+    match /shares/{sid} {
+      allow read: if signedIn() && (resource.data.owner == request.auth.uid || request.auth.uid in resource.data.members);
+      allow create, update: if signedIn() && sid == request.auth.uid + '_' + request.resource.data.image
+        && request.resource.data.keys().hasOnly(['owner', 'image', 'members', 'name', 'at'])
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.image is string && request.resource.data.image.size() <= 40
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60
+        && request.resource.data.at is number
+        && request.resource.data.members is list && request.resource.data.members.size() <= 5
+        && !(request.auth.uid in request.resource.data.members)
+        && friendsOk(request.resource.data.members)
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/items/$(request.resource.data.image));
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+      // The live changes (see js/live.js). Written by the people in the share, stamped with the server time.
+      match /ops/{opId} {
+        allow read: if isShareMember(sid);
+        allow create: if isShareMember(sid) && request.resource.data.by == request.auth.uid && request.resource.data.at == request.time
+          && request.resource.data.keys().hasOnly(['by', 'at', 'seq', 'cid', 'kind', 'layer', 'x', 'y', 'w', 'h', 'patch', 'mask', 'full', 'list', 'deleted'])
+          && request.resource.data.kind in ['px', 'layers'];
+        allow delete: if signedIn() && (resource.data.by == request.auth.uid
+          || get(/databases/$(database)/documents/shares/$(sid)).data.owner == request.auth.uid);
+      }
     }
     // Friends: users/{uid}/friends/{other} = { since }. Accepting a request writes both sides and deletes the request
     // in one batch. Each side may only be created while that request exists (exists() sees the data before the batch)

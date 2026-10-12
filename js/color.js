@@ -156,9 +156,7 @@ function makeWheel(cv) {
 /* ---------- quick color pop-up (opens from the color circle on the tool rail) ---------- */
 function placeColorPop() {
   var pop = $('#colorPop'), r = $('#colorChip').getBoundingClientRect(), m = 8;
-  var w = pop.offsetWidth, h = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight, x, y;
-  if (!window.matchMedia('(max-width: 860px)').matches) { x = r.right + m; y = r.top - 14; } // beside the rail chip
-  else { x = r.right - w; y = r.bottom + m; } // phone layout: the rail is a top bar
+  var w = pop.offsetWidth, h = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight, x = r.right + m, y = r.top - 14; // beside the rail chip
   pop.style.left = clamp(x, m, Math.max(m, vw - w - m)) + 'px';
   pop.style.top = clamp(y, m, Math.max(m, vh - h - m)) + 'px';
 }

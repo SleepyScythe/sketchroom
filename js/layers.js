@@ -37,14 +37,33 @@ function updateHist() { $('#undoBtn').disabled = !H.undo.length; $('#redoBtn').d
 function undo() { abortStroke(); dropSelection(); var e = H.undo.pop(); if (!e) return; e.undo(); H.redo.push(e); updateHist(); scheduleSave(); }
 function redo() { abortStroke(); dropSelection(); var e = H.redo.pop(); if (!e) return; e.redo(); H.undo.push(e); updateHist(); scheduleSave(); }
 function crop(src, x, y, w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h); return c; }
-function restore(L, img, x, y) { L.dirty = true; L.ctx.globalCompositeOperation = 'source-over'; L.ctx.globalAlpha = 1; L.ctx.clearRect(x, y, img.width, img.height); L.ctx.drawImage(img, x, y); }
+function restore(L, img, x, y) {
+  L.dirty = true; L.ctx.globalCompositeOperation = 'source-over'; L.ctx.globalAlpha = 1; L.ctx.clearRect(x, y, img.width, img.height); L.ctx.drawImage(img, x, y);
+  liveTouch(L, x, y, img.width, img.height);
+}
+// Undo and redo of a stroke put back only the pixels that stroke changed (where from and to differ), so changes a friend
+// made nearby while drawing together survive. On your own it's the same as putting the whole area back.
+function restoreChanged(L, from, to, x, y) {
+  var w = from.width, h = from.height, a = from.getContext('2d').getImageData(0, 0, w, h).data, b = to.getContext('2d').getImageData(0, 0, w, h).data;
+  var mask = new ImageData(w, h), m = mask.data, n = 0;
+  for (var i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3]) { m[i + 3] = 255; n++; }
+  if (!n) return;
+  var mc = document.createElement('canvas'); mc.width = w; mc.height = h; mc.getContext('2d').putImageData(mask, 0, 0);
+  var tc = crop(to, 0, 0, w, h), tg = tc.getContext('2d'); tg.globalCompositeOperation = 'destination-in'; tg.drawImage(mc, 0, 0);
+  var g = L.ctx; L.dirty = true;
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1;
+  g.globalCompositeOperation = 'destination-out'; g.drawImage(mc, x, y);
+  g.globalCompositeOperation = 'source-over'; g.drawImage(tc, x, y); g.restore();
+  liveTouch(L, x, y, w, h);
+}
 function recordCrop(L, snap, bb) {
   L.dirty = true;
   var x = clamp(Math.floor(bb.x0), 0, DOC_W), y = clamp(Math.floor(bb.y0), 0, DOC_H);
   var w = clamp(Math.ceil(bb.x1), 0, DOC_W) - x, h = clamp(Math.ceil(bb.y1), 0, DOC_H) - y;
   if (w <= 0 || h <= 0) return;
   var before = crop(snap, x, y, w, h), after = crop(L.canvas, x, y, w, h);
-  pushHist({ undo: function () { restore(L, before, x, y); }, redo: function () { restore(L, after, x, y); } });
+  pushHist({ undo: function () { restoreChanged(L, after, before, x, y); }, redo: function () { restoreChanged(L, before, after, x, y); } });
+  liveTouch(L, x, y, w, h);
 }
 function addLayer() {
   var L = makeLayer('Layer ' + (++layerCount)), idx = S.layers.indexOf(S.active) + 1;
@@ -66,8 +85,8 @@ function delLayer() {
 function clearLayer() {
   if (S.active.locked) { toast('This layer is locked. Unlock it to clear it.'); return; }
   var L = S.active, before = crop(L.canvas, 0, 0, DOC_W, DOC_H);
-  L.ctx.clearRect(0, 0, DOC_W, DOC_H); L.dirty = true;
-  pushHist({ undo: function () { restore(L, before, 0, 0); }, redo: function () { L.ctx.clearRect(0, 0, DOC_W, DOC_H); L.dirty = true; } });
+  L.ctx.clearRect(0, 0, DOC_W, DOC_H); L.dirty = true; liveTouch(L);
+  pushHist({ undo: function () { restore(L, before, 0, 0); }, redo: function () { L.ctx.clearRect(0, 0, DOC_W, DOC_H); L.dirty = true; liveTouch(L); } });
 }
 function moveLayer(dir) {
   var L = S.active, i = S.layers.indexOf(L), j = i + dir;
@@ -83,7 +102,7 @@ function mergeDown() {
   if (L.locked || B.locked) { toast('Unlock both layers to merge them.'); return; }
   var before = crop(B.canvas, 0, 0, DOC_W, DOC_H);
   B.ctx.globalAlpha = L.opacity; B.ctx.globalCompositeOperation = L.blend === 'normal' ? 'source-over' : L.blend;
-  B.ctx.drawImage(L.canvas, 0, 0); B.dirty = true;
+  B.ctx.drawImage(L.canvas, 0, 0); B.dirty = true; liveTouch(B);
   B.ctx.globalAlpha = 1; B.ctx.globalCompositeOperation = 'source-over';
   var after = crop(B.canvas, 0, 0, DOC_W, DOC_H);
   var apply = function () { restore(B, after, 0, 0); removeLayer(L); S.active = B; renderLayers(); };
@@ -136,4 +155,5 @@ function renderLayers() {
   var A = S.active;
   $('#layerName').value = A.name; $('#blendSel').value = A.blend;
   if (layerOpacitySlider) layerOpacitySlider.sync();
+  liveSoon(); // drawing together: send any change to the layer list
 }

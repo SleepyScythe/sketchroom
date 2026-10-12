@@ -1,17 +1,21 @@
 rules_version = '2';
 
 // Sketchroom Cloud Storage rules. Paste into Firebase console > Storage > Rules, then Publish.
-// Each library image's layers are PNGs at users/{uid}/images/{imageId}/{layerId}.png. Only that user can write them.
-// They can be read by that user, and by their friends when the image's library item is not private. That check reads
-// Firestore (users/{uid}/friends and users/{uid}/items), which needs the one-time permission the console asks for.
+// Each library image's layers are PNGs at users/{uid}/images/{imageId}/{layerId}.png.
+// They can be read by that user, by their friends when the image's library item is not private, and by the friends the
+// image is shared with for drawing together (shares/{uid}_{imageId} in Firestore), who can also write them.
+// These checks read Firestore, which needed the one-time permission the console asked for (attached 2026-10-12).
 service firebase.storage {
   match /b/{bucket}/o {
     match /users/{uid}/images/{imageId}/{file} {
       allow read: if request.auth != null && (request.auth.uid == uid
         || (firestore.exists(/databases/(default)/documents/users/$(uid)/friends/$(request.auth.uid))
-            && firestore.get(/databases/(default)/documents/users/$(uid)/items/$(imageId)).data.private == false));
-      allow delete: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null && request.auth.uid == uid
+            && firestore.get(/databases/(default)/documents/users/$(uid)/items/$(imageId)).data.private == false)
+        || firestore.get(/databases/(default)/documents/shares/$(uid + '_' + imageId)).data.members.hasAny([request.auth.uid]));
+      allow delete: if request.auth != null && (request.auth.uid == uid
+        || firestore.get(/databases/(default)/documents/shares/$(uid + '_' + imageId)).data.members.hasAny([request.auth.uid]));
+      allow create, update: if request.auth != null && (request.auth.uid == uid
+          || firestore.get(/databases/(default)/documents/shares/$(uid + '_' + imageId)).data.members.hasAny([request.auth.uid]))
         && request.resource.size < 60 * 1024 * 1024
         && request.resource.contentType == 'image/png';
     }

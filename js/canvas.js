@@ -34,6 +34,27 @@ function setTool(t) {
   syncSliders(); updateQuick();
 }
 
+/* ---------- pen or finger ----------
+   The switch at the bottom of the rail (the owner asked for it). 'pen': pens and the mouse draw, and a finger moves the
+   canvas (one finger pans, two zoom). 'touch': fingers, pens and the mouse all draw. Saved per browser. Until it's set,
+   the first pen stroke switches it to pen. */
+var INPUT_KEY = 'sketchroom.input';
+try { S.inputMode = localStorage.getItem(INPUT_KEY) || ''; } catch (e) { S.inputMode = ''; }
+function setInputMode(m, auto) {
+  S.inputMode = m;
+  try { localStorage.setItem(INPUT_KEY, m); } catch (e) { /* storage unavailable */ }
+  renderInputMode();
+  if (auto) toast('Pen mode: your pen draws and a finger moves the canvas. Switch at the bottom of the tool rail.');
+}
+function renderInputMode() {
+  var b = $('#inputMode'); if (!b) return;
+  var pen = S.inputMode === 'pen';
+  b.innerHTML = icon(pen ? 'pen' : 'finger', 20) + '<span class="vname">' + (pen ? 'Pen' : 'Finger') + '</span>';
+  b.title = pen ? 'Pen mode: only the pen or mouse draws, and a finger moves the canvas. Tap for finger mode.'
+    : 'Finger mode: fingers, pens and the mouse all draw. Tap for pen mode.';
+  b.setAttribute('aria-label', b.title); b.setAttribute('aria-pressed', String(pen));
+}
+
 /* ---------- pointer handling ---------- */
 // cur is a brush or eraser stroke. drag is any other tool's press-and-drag ({ id, move(e), end(e), cancel() }), from tools.js and select.js.
 var pointers = new Map(), cur = null, drag = null, panState = null, pinch = null, spaceDown = false;
@@ -114,11 +135,11 @@ function startPinch() {
 function onDown(e) {
   if (S.doc && (S.doc.loading || S.doc.broken)) return; // the canvas is only a placeholder
   try { vp.setPointerCapture(e.pointerId); } catch (x) { /* capture is best effort */ }
-  if (e.pointerType === 'pen') S.penSeen = true;
+  if (e.pointerType === 'pen' && !S.inputMode) setInputMode('pen', true);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
   if (e.pointerType === 'touch') {
     if (touchList().length >= 2) { abortStroke(); startPinch(); return; }
-    if (S.penSeen && !S.fingerDraws) { startPan(e); return; }
+    if (S.inputMode === 'pen') { startPan(e); return; }
   }
   if (e.pointerType === 'mouse' && e.button === 1) { e.preventDefault(); startPan(e); return; }
   if (e.pointerType === 'mouse' && e.button !== 0) return;

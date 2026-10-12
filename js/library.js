@@ -61,11 +61,13 @@ async function setPrivate(it, on) {
    #/          the library's top level        #/c/<id>    inside a project or folder
    #/d/<id>    an image open in the editor    #/sketch    the quick sketch (kept in this browser)
    #/profile   your profile                   #/friends   friends and friend requests
-   #/u/<uid>   a friend's library (view only), with /c/<id> for inside a project or folder and /d/<id> to view an image */
+   #/u/<uid>   a friend's library (view only), with /c/<id> for inside a project or folder and /d/<id> to view an image
+   #/s/<owner>/<id>   an image a friend shared with you, open in the editor to draw on together */
 var routeToken = 0;
 function parseRoute(h) {
   var m;
   if ((m = /^#\/d\/([A-Za-z0-9]+)$/.exec(h))) return { kind: 'image', id: m[1] };
+  if ((m = /^#\/s\/([A-Za-z0-9]+)\/([A-Za-z0-9]+)$/.exec(h))) return { kind: 'shared', owner: m[1], id: m[2] };
   if (h === '#/sketch') return { kind: 'sketch' };
   if (h === '#/profile') return { kind: 'profile' };
   if (h === '#/friends') return { kind: 'friends' };
@@ -85,7 +87,9 @@ async function waitForItems(t) {
 }
 async function route() {
   var t = ++routeToken, r = parseRoute(location.hash || '#/');
-  var same = !!S.doc && ((r.kind === 'image' && S.doc.id === r.id) || (r.kind === 'sketch' && S.doc.local));
+  if (r.kind === 'shared' && r.owner === S.myId) { location.replace('#/d/' + r.id); return; } // your own image
+  var same = !!S.doc && ((r.kind === 'image' && S.doc.id === r.id && S.doc.owner === S.myId)
+    || (r.kind === 'shared' && S.doc.id === r.id && S.doc.owner === r.owner) || (r.kind === 'sketch' && S.doc.local));
   // Leaving an image (or switching to another one): save it first.
   if (S.doc && !same) { var leaving = S.doc; await leaveDoc(); if (S.doc === leaving) S.doc = null; }
   if (t !== routeToken) return;
@@ -96,6 +100,14 @@ async function route() {
     var it = S.items[r.id];
     if (!it || it.type !== 'image') { toast('That image could not be found.'); location.replace('#/'); return; }
     showView('editor'); if (!same) await openImage(r.id, t);
+    return;
+  }
+  if (r.kind === 'shared') {
+    if (!store.online || !S.myId) { location.replace('#/'); return; }
+    var shared = same ? null : await store.getItem(r.owner, r.id).catch(function () { return null; });
+    if (t !== routeToken) return;
+    if (!same && (!shared || shared.type !== 'image')) { toast('That image could not be opened. The owner may have stopped sharing it.'); location.replace('#/'); return; }
+    showView('editor'); if (!same) await openImage(r.id, t, { owner: r.owner, item: shared });
     return;
   }
   S.homeView = r.kind === 'home' ? 'library' : r.kind;
@@ -139,6 +151,12 @@ function renderHome() {
   if (!ready) return;
   if (S.homeAt && (!S.items[S.homeAt] || S.items[S.homeAt].type === 'image')) S.homeAt = '';
   renderCrumbs();
+  // Images friends shared with you, at the top level.
+  var shared = S.homeAt ? [] : (S.sharedIn || []).filter(function (s) { return S.sharedItems[s.id]; }), sg = $('#sharedGrid');
+  $('#sharedSection').hidden = !shared.length; sg.innerHTML = '';
+  shared.forEach(function (s) {
+    sg.appendChild(makeHomeCard(S.sharedItems[s.id], null, { href: '#/s/' + s.owner + '/' + s.image, sub: 'Shared by ' + personName(s.owner) }));
+  });
   var kids = sortItems(childrenOf(S.homeAt)), grid = $('#homeGrid'), at = S.items[S.homeAt];
   grid.innerHTML = ''; kids.forEach(function (it) { grid.appendChild(makeHomeCard(it)); });
   $('#homeEmpty').hidden = kids.length > 0;
@@ -168,10 +186,12 @@ function cardSub(it, items) {
   return (it.type === 'project' ? 'Project, ' : 'Folder, ') + n + (n === 1 ? ' item' : ' items');
 }
 function openItem(it) { location.hash = it.type === 'image' ? '#/d/' + it.id : '#/c/' + it.id; }
-// friend: { uid, items } for a card in a friend's library, which only opens (no options menu).
-function makeHomeCard(it, friend) {
+// friend: { uid, items } for a card in a friend's library. other: { href, sub } for an image shared with you.
+// Those two only open (no options menu).
+function makeHomeCard(it, friend, other) {
   var d = document.createElement('div'); d.className = 'hcard ' + it.type; d.setAttribute('role', 'button'); d.tabIndex = 0;
-  var open = friend ? function () { location.hash = '#/u/' + friend.uid + (it.type === 'image' ? '/d/' : '/c/') + it.id; } : function () { openItem(it); };
+  var open = other ? function () { location.hash = other.href; }
+    : friend ? function () { location.hash = '#/u/' + friend.uid + (it.type === 'image' ? '/d/' : '/c/') + it.id; } : function () { openItem(it); };
   var th = document.createElement('div'); th.className = 'hthumb';
   if (it.type === 'image') {
     if (it.px) th.classList.add('checker');
@@ -183,11 +203,14 @@ function makeHomeCard(it, friend) {
   var nm = document.createElement('span'); nm.className = 'hname'; nm.textContent = it.name;
   var sub = document.createElement('span'); sub.className = 'hsub'; sub.textContent = cardSub(it, friend && friend.items);
   meta.append(nm, sub); d.append(th, meta);
-  if (!friend) {
+  if (other) sub.textContent = other.sub;
+  if (!friend && !other) {
     if (it.private === true) {
       var lock = document.createElement('span'); lock.className = 'hlock'; lock.innerHTML = icon('lock', 14); lock.title = 'Private: only you can see this';
       d.appendChild(lock); sub.textContent += ' · Private';
     }
+    var sh = S.myShares[it.id];
+    if (sh && (sh.members || []).length) sub.textContent += ' · Drawing together';
     var more = document.createElement('button'); more.className = 'ibtn sm hmore'; more.innerHTML = icon('more', 18);
     more.setAttribute('aria-label', 'Options for ' + it.name); more.title = 'Options';
     more.addEventListener('click', function (e) { e.stopPropagation(); openCardMenu(it, more); });
@@ -203,7 +226,7 @@ var menuItem = null, delTimer = 0;
 function resetDelete() { clearTimeout(delTimer); var b = $('#cmDelete'); b.classList.remove('armed'); b.textContent = 'Delete'; }
 function openCardMenu(it, btn) {
   menuItem = it; resetDelete();
-  var m = $('#cardMenu'); $('#cmMove').hidden = it.type === 'project'; $('#cmDuplicate').hidden = it.type !== 'image';
+  var m = $('#cardMenu'); $('#cmMove').hidden = it.type === 'project'; $('#cmDuplicate').hidden = $('#cmShare').hidden = it.type !== 'image';
   $('#cmPrivate').textContent = it.private === true ? 'Show to friends' : 'Make private';
   m.hidden = false;
   var r = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
@@ -305,6 +328,44 @@ function openMoveDialog(it) {
   });
 }
 
+/* ---------- drawing together ---------- */
+// Pick up to 5 friends who can open this image and draw on it with you (shares/{you}_{imageId}). No one picked stops sharing.
+var SHARE_MAX = 5;
+function openShareDialog(imageId, name) {
+  var current = (S.myShares[imageId] || {}).members || [], host = $('#shareList'), ids = S.friends.map(function (f) { return f.uid; }).sort(byPersonName);
+  host.innerHTML = ''; $('#shareEmpty').hidden = ids.length > 0; $('#shareOk').disabled = !ids.length && !current.length;
+  ids.forEach(function (id) {
+    var lab = document.createElement('label'), c = document.createElement('input'), t = document.createElement('span');
+    c.type = 'checkbox'; c.value = id; c.checked = current.indexOf(id) >= 0; t.textContent = personName(id);
+    c.addEventListener('change', function () {
+      if (c.checked && $$('#shareList input:checked').length > SHARE_MAX) { c.checked = false; toast('Up to ' + SHARE_MAX + ' friends can draw on one image.'); }
+    });
+    lab.append(c, t); host.appendChild(lab);
+  });
+  $('#dlgShareTitle').textContent = 'Draw together on ' + name;
+  runDialog($('#dlgShare'), async function () {
+    var picked = $$('#shareList input:checked').map(function (c) { return c.value; }).slice(0, SHARE_MAX);
+    if (!picked.length && !current.length) return;
+    try {
+      await store.saveShare(imageId, name, picked.length ? picked : null);
+      toast(picked.length ? 'Shared. They can open it from their library and draw with you.' : 'This image is no longer shared.');
+    } catch (e) { toast('Could not save that. Try again.'); }
+  });
+}
+// Keeps each image shared with you up to date for its card (name and thumbnail live in the owner's item).
+var sharedWatch = {};
+function watchSharedItems() {
+  var want = {}; (S.sharedIn || []).forEach(function (s) { want[s.id] = s; });
+  Object.keys(sharedWatch).forEach(function (sid) { if (!want[sid]) { sharedWatch[sid](); delete sharedWatch[sid]; delete S.sharedItems[sid]; } });
+  if (!store.watchItem) return;
+  Object.keys(want).forEach(function (sid) {
+    if (sharedWatch[sid]) return;
+    var s = want[sid];
+    sharedWatch[sid] = store.watchItem(s.owner, s.image, function (it) { if (it) S.sharedItems[sid] = it; else delete S.sharedItems[sid]; renderHome(); });
+  });
+  loadPeople(Object.keys(want).map(function (sid) { return want[sid].owner; }));
+}
+
 /* ---------- importing and the quick sketch ---------- */
 async function importAsNewImage(file) {
   if (!file) return;
@@ -366,6 +427,8 @@ function initLibrary() {
   $('#cmMove').addEventListener('click', function () { if (menuItem) openMoveDialog(menuItem); });
   $('#cmDuplicate').addEventListener('click', function () { if (menuItem) duplicateImage(menuItem); });
   $('#cmPrivate').addEventListener('click', function () { if (menuItem) setPrivate(menuItem, menuItem.private !== true); });
+  $('#cmShare').addEventListener('click', function () { if (menuItem) openShareDialog(menuItem.id, menuItem.name); });
+  $('#shareBtn').addEventListener('click', function () { if (S.doc && !S.doc.local) openShareDialog(S.doc.id, S.doc.name); });
   $('#friendsBtn').addEventListener('click', function () { location.hash = '#/friends'; });
   $('#cmDelete').addEventListener('click', function (e) {
     var b = $('#cmDelete'), it = menuItem; if (!it) return;

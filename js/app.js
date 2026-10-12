@@ -5,18 +5,57 @@
 /* ---------- wiring ---------- */
 // Saving needs an account when Firebase is on. The popup opens from the click, so iPad Safari allows it.
 async function signedIn() { return !store.online || !!S.myId || await store.signIn(); }
+/* ---------- popouts ----------
+   The panel (Brushes, Edit, Color, Text), Layers and the "…" tools menu float over the canvas, so opening or closing one
+   never changes the canvas size, zoom or position (the owner asked for this). The panel and Layers stay open while
+   drawing, like the color pop-up. The tools menu closes once a tool is picked or anything else is tapped. */
+var panelTab = 'brushes';
 function showTab(name) {
+  if (name === 'layers') { openLayers(); return; }
+  panelTab = name;
   $$('.tab').forEach(function (t) { t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
-  ['brushes', 'edit', 'layers', 'color', 'text'].forEach(function (n) { $('#pane-' + n).hidden = n !== name; });
+  ['brushes', 'edit', 'color', 'text'].forEach(function (n) { $('#pane-' + n).hidden = n !== name; });
   if (name === 'text') { setTool('text'); ensureFont(); }
   if (name === 'edit') { requestAnimationFrame(drawEdit); }
+}
+function openPanel(tab) {
+  $('#panelPop').hidden = false; $('#panelBtn').setAttribute('aria-expanded', 'true'); $('#work').classList.add('panelopen');
+  showTab(tab || panelTab);
+}
+function closePanel() { $('#panelPop').hidden = true; $('#panelBtn').setAttribute('aria-expanded', 'false'); $('#work').classList.remove('panelopen'); }
+// Lines a popout up with its rail button, kept inside the work area.
+function placeBeside(pop, btn, alignBottom) {
+  var w = $('#work').getBoundingClientRect(), b = btn.getBoundingClientRect(), h = pop.offsetHeight, m = 8;
+  pop.style.top = clamp((alignBottom ? b.bottom - h : b.top) - w.top, m, Math.max(m, w.height - h - m)) + 'px';
+}
+function openLayers() { $('#layersPop').hidden = false; $('#layersBtn').setAttribute('aria-expanded', 'true'); placeBeside($('#layersPop'), $('#layersBtn'), true); }
+function closeLayers() { $('#layersPop').hidden = true; $('#layersBtn').setAttribute('aria-expanded', 'false'); }
+function openTools() { $('#toolsPop').hidden = false; $('#moreTools').setAttribute('aria-expanded', 'true'); placeBeside($('#toolsPop'), $('#moreTools'), false); }
+function closeTools() { $('#toolsPop').hidden = true; $('#moreTools').setAttribute('aria-expanded', 'false'); }
+function wirePopouts() {
+  $('#panelBtn').addEventListener('click', function () { if ($('#panelPop').hidden) openPanel(); else closePanel(); });
+  $('#panelClose').addEventListener('click', closePanel);
+  $('#layersBtn').addEventListener('click', function () { if ($('#layersPop').hidden) openLayers(); else closeLayers(); });
+  $('#layersClose').addEventListener('click', closeLayers);
+  $('#inputMode').addEventListener('click', function () { setInputMode(S.inputMode === 'pen' ? 'touch' : 'pen'); });
+  renderInputMode();
+  $('#moreTools').addEventListener('click', function (e) { e.stopPropagation(); if ($('#toolsPop').hidden) openTools(); else closeTools(); });
+  $('#toolsPop').addEventListener('click', function (e) { if (e.target.closest('[data-tool]')) closeTools(); });
+  document.addEventListener('pointerdown', function (e) {
+    if (!$('#toolsPop').hidden && !$('#toolsPop').contains(e.target) && !$('#moreTools').contains(e.target)) closeTools();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeTools(); closeLayers(); closePanel(); } });
+  window.addEventListener('resize', function () {
+    if (!$('#layersPop').hidden) placeBeside($('#layersPop'), $('#layersBtn'), true);
+    if (!$('#toolsPop').hidden) placeBeside($('#toolsPop'), $('#moreTools'), false);
+  });
 }
 function wire() {
   $$('.tab').forEach(function (t) { t.addEventListener('click', function () { showTab(t.dataset.tab); }); });
   $$('[data-tool]').forEach(function (b) { b.addEventListener('click', function () { setTool(b.dataset.tool); }); });
+  wirePopouts();
   $('#undoBtn').addEventListener('click', undo); $('#redoBtn').addEventListener('click', redo);
   $('#zoomIn').addEventListener('click', function () { zoomAt(1.25); }); $('#zoomOut').addEventListener('click', function () { zoomAt(0.8); });
-  $('#zoomFit').addEventListener('click', function () { S.userZoomed = false; fit(); });
   $('#zoomVal').addEventListener('click', function () { var r = vp.getBoundingClientRect(); zoomAt(1 / S.view.s, r.left + r.width / 2, r.top + r.height / 2); });
 
   vp.addEventListener('pointerdown', onDown); vp.addEventListener('pointermove', onMove);
@@ -149,7 +188,7 @@ function wire() {
     if (S.sel && (k === 'escape' || k === 'enter')) { dropSelection(true); return; }
     if (S.sel && (k === 'delete' || k === 'backspace')) { e.preventDefault(); deleteSelection(); return; }
     var keys = { b: 'brush', e: 'eraser', s: 'smudge', g: 'fill', l: 'line', u: 'shape', m: 'select', i: 'picker', h: 'hand' };
-    if (keys[k]) setTool(keys[k]); else if (k === 't') { showTab('text'); }
+    if (keys[k]) setTool(keys[k]); else if (k === 't') { openPanel('text'); }
     else if (k === '[' || k === ']') {
       var p = curParams(), f = k === ']' ? 1.15 : 1 / 1.15;
       p.size = clamp(Math.round(p.size * f) + (k === ']' ? 1 : -1) * (p.size < 10 ? 0 : 0), 1, 300); if (Math.round(p.size * f) === p.size) p.size = clamp(p.size + (k === ']' ? 1 : -1), 1, 300);

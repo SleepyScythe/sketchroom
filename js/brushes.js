@@ -17,16 +17,59 @@ function makeSlider(label, min, max, unit, get, set, log) {
   i.addEventListener('input', function () { var v = fromPos(Number(i.value)); set(v); o.textContent = v + unit; });
   wrap.append(l, o, i); wrap.sync(); return wrap;
 }
+// A tall slider for the tool rail, with the same get/set and log scale as makeSlider. Dragging changes the value by how far
+// the finger or pen moves (so touching the rail never jumps the size), and the value shows beside it while dragging.
+function makeVSlider(label, min, max, unit, get, set, log) {
+  var wrap = document.createElement('div'); wrap.className = 'vslider'; wrap.tabIndex = 0;
+  wrap.setAttribute('role', 'slider'); wrap.setAttribute('aria-orientation', 'vertical');
+  wrap.setAttribute('aria-valuemin', min); wrap.setAttribute('aria-valuemax', max);
+  var track = document.createElement('div'); track.className = 'vtrack';
+  var fill = document.createElement('div'); fill.className = 'vfill';
+  var thumb = document.createElement('div'); thumb.className = 'vthumb';
+  var name = document.createElement('span'); name.className = 'vname';
+  var bubble = document.createElement('div'); bubble.className = 'vbubble'; bubble.hidden = true;
+  track.append(fill, thumb); wrap.append(track, name, bubble);
+  var toPos = function (v) { return log ? 100 * Math.log(Math.max(v, 1)) / Math.log(max) : (v - min) / (max - min) * 100; };
+  var fromPos = function (p) { p = clamp(p, 0, 100); return log ? clamp(Math.round(Math.pow(max, p / 100)), min, max) : Math.round(min + (max - min) * p / 100); };
+  var show = function (v) {
+    var p = clamp(toPos(v), 0, 100);
+    fill.style.height = p + '%'; thumb.style.bottom = p + '%';
+    wrap.setAttribute('aria-valuenow', v); wrap.setAttribute('aria-valuetext', v + unit); bubble.textContent = v + unit;
+  };
+  var apply = function (v) { v = clamp(v, min, max); if (v !== get()) set(v); show(v); };
+  var start = null;
+  wrap.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); start = { id: e.pointerId, y: e.clientY, p: toPos(get()) };
+    try { wrap.setPointerCapture(e.pointerId); } catch (x) { /* capture is best effort */ }
+    var r = wrap.getBoundingClientRect(); bubble.style.left = (r.right + 10) + 'px'; bubble.style.top = (r.top + r.height / 2) + 'px';
+    bubble.hidden = false; wrap.classList.add('active');
+  });
+  wrap.addEventListener('pointermove', function (e) {
+    if (!start || e.pointerId !== start.id) return;
+    apply(fromPos(start.p + (start.y - e.clientY) / track.getBoundingClientRect().height * 100));
+  });
+  var end = function (e) { if (!start || e.pointerId !== start.id) return; start = null; bubble.hidden = true; wrap.classList.remove('active'); };
+  wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
+  wrap.addEventListener('keydown', function (e) {
+    var v = get(), step = log ? Math.max(1, Math.round(v * 0.1)) : 1;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') v += step; else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') v -= step;
+    else if (e.key === 'PageUp') v += step * 10; else if (e.key === 'PageDown') v -= step * 10; else return;
+    e.preventDefault(); e.stopPropagation(); apply(v);
+  });
+  wrap.setLabel = function (t) { name.textContent = t; wrap.setAttribute('aria-label', t); wrap.title = t; };
+  wrap.sync = function () { show(get()); };
+  wrap.setLabel(label); wrap.sync(); return wrap;
+}
 var quickSliders = [], editSliders = [];
 function curParams() {
   if (isPixel() && S.tool !== 'smudge') return S.tool === 'eraser' ? S.pxEraser : S.pxPen;
   return S.tool === 'eraser' ? S.eraser : S.tool === 'smudge' ? S.smudge : S.brush;
 }
 function buildSliders() {
-  var q = $('#qPaint');
-  [['size', 'Size', 1, 300, 'px', true], ['opacity', 'Opacity', 1, 100, '%']].forEach(function (d) {
-    var s = makeSlider(d[1], d[2], d[3], d[4], function () { return curParams()[d[0]]; }, function (v) { curParams()[d[0]] = v; brushChanged(true); }, d[5]);
-    quickSliders.push(s); q.appendChild(s);
+  // Size and opacity of the current tool, on the rail. quickSliders[1] is relabeled "Strength" for smudge (updateQuick).
+  [['size', 'Size', 1, 300, 'px', true, '#railSize'], ['opacity', 'Opacity', 1, 100, '%', false, '#railOpacity']].forEach(function (d) {
+    var s = makeVSlider(d[1], d[2], d[3], d[4], function () { return curParams()[d[0]]; }, function (v) { curParams()[d[0]] = v; brushChanged(true); }, d[5]);
+    quickSliders.push(s); $(d[6]).appendChild(s);
   });
   var host = $('#editSliders');
   SCHEMA.forEach(function (d) {

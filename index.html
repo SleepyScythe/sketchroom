@@ -17,7 +17,7 @@
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,600..800&family=Figtree:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=15">
+<link rel="stylesheet" href="styles.css?v=16">
 </head>
 <body>
 <div class="home" id="home" hidden>
@@ -91,6 +91,11 @@
         <span>You have a quick sketch saved in this browser.</span>
         <button class="btn sm primary" id="sketchToLibrary">Add it to the library</button>
         <button class="btn sm" id="sketchOpen">Open it</button>
+      </div>
+      <div class="sharedsection" id="sharedSection" hidden>
+        <h2 class="sectiontitle">Shared with you</h2>
+        <div class="hgrid" id="sharedGrid"></div>
+        <h2 class="sectiontitle">Your library</h2>
       </div>
       <div class="hgrid" id="homeGrid"></div>
       <p class="homeempty" id="homeEmpty" hidden></p>
@@ -180,6 +185,7 @@
     <button id="cmRename">Rename</button>
     <button id="cmMove">Move to…</button>
     <button id="cmDuplicate">Duplicate</button>
+    <button id="cmShare">Draw together…</button>
     <button id="cmPrivate">Make private</button>
     <button id="cmDelete">Delete</button>
   </div>
@@ -229,6 +235,17 @@
     <h2 id="dlgNameTitle">New folder</h2>
     <label class="field">Name<input type="text" id="nameInput" maxlength="60" required></label>
     <div class="tools-row dlgbtns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="ok" id="nameOk">Create</button></div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="dlgShare" aria-labelledby="dlgShareTitle">
+  <form method="dialog" id="formShare">
+    <h2 id="dlgShareTitle">Draw together</h2>
+    <p class="hint">Pick up to 5 friends. They can open this image from their library any time and draw on it with you. When you're in it at the same time, you see each other's strokes as they happen.</p>
+    <div class="movelist" id="shareList"></div>
+    <p class="hint" id="shareEmpty" hidden>You don't have any friends on Sketchroom yet. Add them on the Friends page first.</p>
+    <p class="hint">Untick everyone to stop sharing. The image stays in your library either way.</p>
+    <div class="tools-row dlgbtns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="ok" id="shareOk">Save</button></div>
   </form>
 </dialog>
 
@@ -310,8 +327,10 @@
       <button class="ibtn zoomgroup" id="zoomOut" title="Zoom out" aria-label="Zoom out" data-icon="minus"></button>
       <button class="zoomval zoomgroup" id="zoomVal" title="Reset to 100%">100%</button>
       <button class="ibtn zoomgroup" id="zoomIn" title="Zoom in" aria-label="Zoom in" data-icon="plus"></button>
-      <button class="ibtn zoomgroup" id="zoomFit" title="Fit canvas to screen" aria-label="Fit canvas to screen" data-icon="fit"></button>
       <span class="sep"></span>
+      <span class="livebadge" id="liveBadge" hidden>Live</span>
+      <button class="ibtn" id="shareBtn" title="Draw together with friends" aria-label="Draw together with friends" data-icon="share" hidden></button>
+      <button class="btn panelbtn" id="panelBtn" title="Brushes, brush editor, color and text" aria-controls="panelPop" aria-expanded="false"><span data-icon="brush"></span><span class="lbl">Brushes</span></button>
       <div class="menu-wrap">
         <button class="btn" id="fileBtn" aria-haspopup="true" aria-expanded="false">File</button>
         <div class="menu" id="fileMenu" hidden>
@@ -336,19 +355,18 @@
     </div>
   </header>
 
-  <div class="work">
+  <div class="work" id="work">
+    <!-- The rail: brush, eraser, color, the other tools behind "…", size and opacity, and layers.
+         Everything else floats over the canvas, so opening or closing a panel never moves or rezooms the drawing. -->
     <nav class="tools" aria-label="Tools">
       <button class="ibtn" data-tool="brush" title="Brush (B)" aria-label="Brush" data-icon="pen"></button>
       <button class="ibtn" data-tool="eraser" title="Eraser (E)" aria-label="Eraser" data-icon="eraser"></button>
-      <button class="ibtn" data-tool="smudge" title="Smudge (S)" aria-label="Smudge" data-icon="smudge"></button>
-      <button class="ibtn" data-tool="fill" title="Fill (G)" aria-label="Fill" data-icon="fill"></button>
-      <button class="ibtn" data-tool="line" title="Line (L). Hold Shift to snap the angle" aria-label="Line" data-icon="line"></button>
-      <button class="ibtn" data-tool="shape" title="Shapes (U). Hold Shift for a square or circle" aria-label="Shapes" data-icon="shapes"></button>
-      <button class="ibtn" data-tool="select" title="Select and move (M)" aria-label="Select and move" data-icon="select"></button>
-      <button class="ibtn" data-tool="text" title="Text (T)" aria-label="Text" data-icon="type"></button>
-      <button class="ibtn" data-tool="picker" title="Color picker (I)" aria-label="Color picker" data-icon="pipette"></button>
-      <button class="ibtn" data-tool="hand" title="Move canvas (H or hold Space)" aria-label="Move canvas" data-icon="hand"></button>
       <button class="chip" id="colorChip" title="Colors" aria-label="Current color. Open quick colors" aria-haspopup="dialog" aria-expanded="false"></button>
+      <button class="ibtn" id="moreTools" title="More tools" aria-label="More tools" aria-haspopup="true" aria-expanded="false" aria-controls="toolsPop" data-icon="more"></button>
+      <div class="vhost" id="railSize"></div>
+      <div class="vhost" id="railOpacity"></div>
+      <button class="ibtn" id="layersBtn" title="Layers" aria-label="Layers" aria-controls="layersPop" aria-expanded="false" data-icon="layers"></button>
+      <button class="modebtn" id="inputMode" aria-pressed="false"></button>
     </nav>
 
     <section class="viewport" id="vp" aria-label="Drawing canvas">
@@ -359,10 +377,9 @@
       <div id="toast" role="status"></div>
     </section>
 
-    <aside class="dock" aria-label="Brush, layer and color settings">
-      <div class="quick" id="quick">
+    <!-- Settings for the tools behind "…", shown at the top of the canvas while one of them is picked. -->
+    <div class="toolstrip" id="toolStrip" hidden>
         <div class="who" id="quickWho">Brush</div>
-        <div class="qgroup" id="qPaint"></div>
         <div class="qgroup" id="qFill" hidden>
           <label class="check"><input type="checkbox" id="fillAll"> Use all visible layers to find the edges</label>
         </div>
@@ -381,13 +398,62 @@
           <div class="tools-row"><button class="btn" id="selNone">Deselect</button><button class="btn" id="selDelete">Delete selected</button></div>
           <p class="hint">Drag around part of the active layer, then drag inside the selection to move it.</p>
         </div>
+        <div class="qgroup" id="qText" hidden><button class="btn sm" id="textOpen">Text settings</button></div>
+    </div>
+
+    <div class="pop toolspop" id="toolsPop" role="menu" aria-label="More tools" hidden>
+      <button role="menuitem" data-tool="smudge" title="Smudge (S)"><span data-icon="smudge"></span>Smudge</button>
+      <button role="menuitem" data-tool="fill" title="Fill (G)"><span data-icon="fill"></span>Fill</button>
+      <button role="menuitem" data-tool="line" title="Line (L). Hold Shift to snap the angle"><span data-icon="line"></span>Line</button>
+      <button role="menuitem" data-tool="shape" title="Shapes (U). Hold Shift for a square or circle"><span data-icon="shapes"></span>Shapes</button>
+      <button role="menuitem" data-tool="select" title="Select and move (M)"><span data-icon="select"></span>Select</button>
+      <button role="menuitem" data-tool="text" title="Text (T)"><span data-icon="type"></span>Text</button>
+      <button role="menuitem" data-tool="picker" title="Color picker (I)"><span data-icon="pipette"></span>Pick color</button>
+      <button role="menuitem" data-tool="hand" title="Move canvas (H or hold Space)"><span data-icon="hand"></span>Move canvas</button>
+    </div>
+
+    <div class="pop layerspop" id="layersPop" role="dialog" aria-label="Layers" hidden>
+      <div class="pophead"><h2>Layers</h2><button class="ibtn sm" id="layersClose" title="Close (Esc)" aria-label="Close layers" data-icon="x"></button></div>
+      <div class="pane" id="pane-layers">
+        <div class="layers" id="layerList"></div>
+        <div class="tools-row">
+          <button class="ibtn" id="lAdd" title="New layer" aria-label="New layer" data-icon="plus"></button>
+          <button class="ibtn" id="lDup" title="Duplicate layer" aria-label="Duplicate layer" data-icon="copy"></button>
+          <button class="ibtn" id="lUp" title="Move layer up" aria-label="Move layer up" data-icon="up"></button>
+          <button class="ibtn" id="lDown" title="Move layer down" aria-label="Move layer down" data-icon="down"></button>
+          <button class="ibtn" id="lMerge" title="Merge into the layer below" aria-label="Merge into the layer below" data-icon="merge"></button>
+          <button class="btn" id="lClear">Clear</button>
+          <button class="ibtn" id="lDel" title="Delete layer" aria-label="Delete layer" data-icon="trash"></button>
+        </div>
+        <div class="tools-row">
+          <button class="btn" id="lImport">Import image to trace</button>
+          <input type="file" id="lImportFile" accept="image/*" hidden>
+        </div>
+        <p class="hint">The lock next to each layer stops it from being drawn on. Imported images come in locked, at 40% opacity, under your current layer.</p>
+        <div>
+          <h3 style="margin-bottom:6px">Layer name</h3>
+          <input type="text" id="layerName" maxlength="30" aria-label="Layer name">
+        </div>
+        <div id="layerSliderHost"></div>
+        <div>
+          <h3 style="margin-bottom:6px">Blend mode</h3>
+          <select id="blendSel" aria-label="Blend mode">
+            <option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option>
+            <option value="overlay">Overlay</option><option value="darken">Darken</option><option value="lighten">Lighten</option>
+          </select>
+        </div>
       </div>
-      <div class="tabs" role="tablist" id="tabs">
-        <button class="tab" role="tab" data-tab="brushes" aria-selected="true">Brushes</button>
-        <button class="tab" role="tab" data-tab="edit" aria-selected="false">Edit</button>
-        <button class="tab" role="tab" data-tab="layers" aria-selected="false">Layers</button>
-        <button class="tab" role="tab" data-tab="color" aria-selected="false">Color</button>
-        <button class="tab" role="tab" data-tab="text" aria-selected="false">Text</button>
+    </div>
+
+    <aside class="pop panelpop" id="panelPop" aria-label="Brushes, brush editor, color and text" hidden>
+      <div class="pophead">
+        <div class="tabs" role="tablist" id="tabs">
+          <button class="tab" role="tab" data-tab="brushes" aria-selected="true">Brushes</button>
+          <button class="tab" role="tab" data-tab="edit" aria-selected="false">Edit</button>
+          <button class="tab" role="tab" data-tab="color" aria-selected="false">Color</button>
+          <button class="tab" role="tab" data-tab="text" aria-selected="false">Text</button>
+        </div>
+        <button class="ibtn sm" id="panelClose" title="Close (Esc)" aria-label="Close the panel" data-icon="x"></button>
       </div>
 
       <div class="pane" id="pane-brushes">
@@ -442,36 +508,6 @@
           <button class="btn" id="suggestBrush" hidden>Suggest for free library</button>
         </div>
         <p class="hint" id="editHint"></p>
-      </div>
-
-      <div class="pane" id="pane-layers" hidden>
-        <div class="layers" id="layerList"></div>
-        <div class="tools-row">
-          <button class="ibtn" id="lAdd" title="New layer" aria-label="New layer" data-icon="plus"></button>
-          <button class="ibtn" id="lDup" title="Duplicate layer" aria-label="Duplicate layer" data-icon="copy"></button>
-          <button class="ibtn" id="lUp" title="Move layer up" aria-label="Move layer up" data-icon="up"></button>
-          <button class="ibtn" id="lDown" title="Move layer down" aria-label="Move layer down" data-icon="down"></button>
-          <button class="ibtn" id="lMerge" title="Merge into the layer below" aria-label="Merge into the layer below" data-icon="merge"></button>
-          <button class="btn" id="lClear">Clear</button>
-          <button class="ibtn" id="lDel" title="Delete layer" aria-label="Delete layer" data-icon="trash"></button>
-        </div>
-        <div class="tools-row">
-          <button class="btn" id="lImport">Import image to trace</button>
-          <input type="file" id="lImportFile" accept="image/*" hidden>
-        </div>
-        <p class="hint">The lock next to each layer stops it from being drawn on. Imported images come in locked, at 40% opacity, under your current layer.</p>
-        <div>
-          <h3 style="margin-bottom:6px">Layer name</h3>
-          <input type="text" id="layerName" maxlength="30" aria-label="Layer name">
-        </div>
-        <div id="layerSliderHost"></div>
-        <div>
-          <h3 style="margin-bottom:6px">Blend mode</h3>
-          <select id="blendSel" aria-label="Blend mode">
-            <option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option>
-            <option value="overlay">Overlay</option><option value="darken">Darken</option><option value="lighten">Lighten</option>
-          </select>
-        </div>
       </div>
 
       <div class="pane" id="pane-color" hidden>
@@ -534,28 +570,29 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=15"></script>
-<script src="js/core.js?v=15"></script>
-<script src="js/config.js?v=15"></script>
-<script src="js/engine.js?v=15"></script>
-<script src="js/layers.js?v=15"></script>
-<script src="js/brushes.js?v=15"></script>
-<script src="js/importbrush.js?v=15"></script>
-<script src="js/storage.js?v=15"></script>
-<script src="js/text.js?v=15"></script>
-<script src="js/canvas.js?v=15"></script>
-<script src="js/color.js?v=15"></script>
-<script src="js/tools.js?v=15"></script>
-<script src="js/select.js?v=15"></script>
-<script src="js/pixel.js?v=15"></script>
-<script src="js/pad.js?v=15"></script>
-<script src="js/files.js?v=15"></script>
-<script src="js/document.js?v=15"></script>
-<script src="js/background.js?v=15"></script>
-<script src="js/library.js?v=15"></script>
-<script src="js/profile.js?v=15"></script>
-<script src="js/friends.js?v=15"></script>
-<script src="js/landing.js?v=15"></script>
-<script src="js/app.js?v=15"></script>
+<script src="js/firebase-config.js?v=16"></script>
+<script src="js/core.js?v=16"></script>
+<script src="js/config.js?v=16"></script>
+<script src="js/engine.js?v=16"></script>
+<script src="js/layers.js?v=16"></script>
+<script src="js/brushes.js?v=16"></script>
+<script src="js/importbrush.js?v=16"></script>
+<script src="js/storage.js?v=16"></script>
+<script src="js/text.js?v=16"></script>
+<script src="js/canvas.js?v=16"></script>
+<script src="js/color.js?v=16"></script>
+<script src="js/tools.js?v=16"></script>
+<script src="js/select.js?v=16"></script>
+<script src="js/pixel.js?v=16"></script>
+<script src="js/pad.js?v=16"></script>
+<script src="js/files.js?v=16"></script>
+<script src="js/document.js?v=16"></script>
+<script src="js/live.js?v=16"></script>
+<script src="js/background.js?v=16"></script>
+<script src="js/library.js?v=16"></script>
+<script src="js/profile.js?v=16"></script>
+<script src="js/friends.js?v=16"></script>
+<script src="js/landing.js?v=16"></script>
+<script src="js/app.js?v=16"></script>
 </body>
 </html>

@@ -110,7 +110,13 @@ async function initStore() {
   store.deleteMessage = async function (id) { await db.collection('messages').doc(id).delete(); };
   // The drawing library. Items are kept in S.items by the listener below.
   store.createItem = async function (data) { var id = uid() + uid(); await home().collection('items').doc(id).set(data); return id; };
-  store.updateItem = async function (id, patch) { await home().collection('items').doc(id).update(patch); };
+  // owner: whose library the item is in. Friends drawing on a shared image save into the owner's item and files.
+  var itemRef = function (id, owner) { return db.collection('users').doc(owner || auth.currentUser.uid).collection('items').doc(id); };
+  store.updateItem = async function (id, patch, owner) { await itemRef(id, owner).update(patch); };
+  store.getItem = async function (owner, id) { var d = await itemRef(id, owner).get(); if (!d.exists) return null; var v = d.data() || {}; v.id = d.id; return v; };
+  store.watchItem = function (owner, id, onItem) {
+    return itemRef(id, owner).onSnapshot(function (d) { var v = d.exists ? d.data() || {} : null; if (v) v.id = d.id; onItem(v); }, function () { onItem(null); });
+  };
   // Several items at once ([{ id, patch }]), e.g. making a folder and everything in it private.
   store.updateItems = async function (list) {
     for (var i = 0; i < list.length; i += 400) {
@@ -126,7 +132,7 @@ async function initStore() {
     return files.ref('users/' + (owner || auth.currentUser.uid) + '/images/' + imgId + '/' + layerId + '.png');
   };
   // no-cache: the same file is overwritten on every save, so browsers must not reuse an old copy.
-  store.uploadLayer = async function (imgId, layerId, blob) { await layerRef(imgId, layerId).put(blob, { contentType: 'image/png', cacheControl: 'no-cache' }); };
+  store.uploadLayer = async function (imgId, layerId, blob, owner) { await layerRef(imgId, layerId, owner).put(blob, { contentType: 'image/png', cacheControl: 'no-cache' }); };
   store.downloadLayer = async function (imgId, layerId, owner) {
     var url;
     try { url = await layerRef(imgId, layerId, owner).getDownloadURL(); }
@@ -135,8 +141,42 @@ async function initStore() {
     if (!r.ok) throw new Error('download failed ' + r.status);
     return r.blob();
   };
-  store.deleteLayer = async function (imgId, layerId) {
-    try { await layerRef(imgId, layerId).delete(); } catch (e) { if (!e || e.code !== 'storage/object-not-found') throw e; }
+  store.deleteLayer = async function (imgId, layerId, owner) {
+    try { await layerRef(imgId, layerId, owner).delete(); } catch (e) { if (!e || e.code !== 'storage/object-not-found') throw e; }
+  };
+  // Drawing together. shares/{owner}_{imageId} = { owner, image, members (up to 5 friends), name, at } lets those friends
+  // open and draw on that image. shares/{sid}/ops/{opId} carries the changes live (see live.js).
+  store.saveShare = async function (imageId, name, members) {
+    var me = auth.currentUser.uid, ref = db.collection('shares').doc(me + '_' + imageId);
+    if (members === null) await ref.delete();
+    else await ref.set({ owner: me, image: imageId, members: members, name: String(name || 'Untitled').slice(0, 60), at: Date.now() });
+  };
+  store.liveSend = async function (sid, ops) {
+    var col = db.collection('shares').doc(sid).collection('ops'), me = auth.currentUser.uid, ts = fb.firestore.FieldValue.serverTimestamp();
+    // Batches stay well under Firestore's request size limit (pictures can be a few hundred KB each).
+    for (var i = 0; i < ops.length;) {
+      var b = db.batch(), size = 0, n = 0;
+      while (i < ops.length && n < 400 && (n === 0 || size + JSON.stringify(ops[i]).length < 7000000)) {
+        size += JSON.stringify(ops[i]).length; b.set(col.doc(), Object.assign({}, ops[i], { by: me, at: ts })); i++; n++;
+      }
+      await b.commit();
+    }
+  };
+  // Calls onOps(ops, first) with ops newer than fromMs: first with everything already there, then with each new one.
+  store.liveListen = function (sid, fromMs, onOps, onError) {
+    var first = true;
+    return db.collection('shares').doc(sid).collection('ops').where('at', '>=', fb.firestore.Timestamp.fromMillis(fromMs)).orderBy('at')
+      .onSnapshot(function (snap) {
+        var docs = first ? snap.docs : snap.docChanges().filter(function (c) { return c.type === 'added'; }).map(function (c) { return c.doc; });
+        var ops = docs.map(function (d) { var v = d.data({ serverTimestamps: 'estimate' }) || {}; v.id = d.id; v.atMs = v.at && v.at.toMillis ? v.at.toMillis() : Date.now(); return v; });
+        var f = first; first = false; onOps(ops, f);
+      }, onError);
+  };
+  // The owner tidies up changes the saved copy no longer needs (older than beforeMs).
+  store.liveCleanup = async function (sid, beforeMs) {
+    var old = await db.collection('shares').doc(sid).collection('ops').where('at', '<', fb.firestore.Timestamp.fromMillis(beforeMs)).limit(400).get();
+    if (!old.size) return;
+    var b = db.batch(); old.docs.forEach(function (d) { b.delete(d.ref); }); await b.commit();
   };
   // Friends. friendRequests/{from}_{to} = { from, to, at }. Accepting writes users/{uid}/friends/{friendUid} = { since }
   // on both sides and deletes the request in one batch; the rules only allow that while the request exists.
@@ -194,6 +234,7 @@ async function initStore() {
     S.myName = user ? (user.displayName || user.email || 'You') : '';
     S.canEdit = false; S.mine = []; S.myFonts = []; S.requests = []; S.myRequests = []; S.uploadedFonts = []; S.profile = null; S.messages = [];
     S.friends = []; S.friendIn = []; S.friendOut = []; S.people = {}; closeFriend();
+    S.myShares = {}; S.sharedIn = []; watchSharedItems();
     if (user) {
       var mine = db.collection('users').doc(user.uid);
       try { S.canEdit = (await db.collection('admins').doc(user.uid).get()).exists; } catch (e) { S.canEdit = false; }
@@ -238,6 +279,15 @@ async function initStore() {
       var fr = db.collection('friendRequests'), reqList = function (snap) { return snap.docs.map(function (d) { return d.data() || {}; }); };
       unsub.push(fr.where('to', '==', user.uid).limit(200).onSnapshot(function (snap) { S.friendIn = reqList(snap); friendsChanged(); }, function () { /* optional */ }));
       unsub.push(fr.where('from', '==', user.uid).limit(200).onSnapshot(function (snap) { S.friendOut = reqList(snap); friendsChanged(); }, function () { /* optional */ }));
+      // Images you share (by image id) and images friends share with you.
+      var shares = db.collection('shares'), shareList = function (snap) { return snap.docs.map(function (d) { var v = d.data() || {}; v.id = d.id; return v; }); };
+      unsub.push(shares.where('owner', '==', user.uid).limit(500).onSnapshot(function (snap) {
+        S.myShares = {}; shareList(snap).forEach(function (v) { S.myShares[v.image] = v; });
+        renderHome(); liveSharesChanged();
+      }, function () { /* sharing is optional */ }));
+      unsub.push(shares.where('members', 'array-contains', user.uid).limit(200).onSnapshot(function (snap) {
+        S.sharedIn = shareList(snap); watchSharedItems(); renderHome(); liveSharesChanged();
+      }, function () { /* sharing is optional */ }));
       var reqs = db.collection('requests');
       if (S.canEdit) {
         unsub.push(reqs.orderBy('at', 'asc').limit(100).onSnapshot(function (snap) {

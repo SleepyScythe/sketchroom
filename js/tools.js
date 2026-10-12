@@ -1,19 +1,24 @@
-/* Sketchroom: Fill, line, shapes and smudge, plus the quick settings at the top of the dock that change with the tool.
+/* Sketchroom: Fill, line, shapes and smudge, plus the tool strip over the canvas that changes with the tool.
    Plain script. Shares globals with the other files in js/; load order is set in index.html. */
 'use strict';
 
-/* ---------- quick settings per tool ---------- */
+/* ---------- the tool strip ----------
+   Brush and eraser are on the rail. The other tools sit behind "…" (MORE_TOOLS), and while one of them is picked a small
+   strip at the top of the canvas names it and holds its settings. Size and opacity are always the rail sliders. */
+var MORE_TOOLS = ['smudge', 'fill', 'line', 'shape', 'select', 'text', 'picker', 'hand'];
 function quickTitle() {
   var t = S.tool, bn = S.brushName + (S.dirty ? ' (edited)' : '');
   if (isPixel() && { brush: 1, eraser: 1, line: 1, shape: 1 }[t]) return { brush: 'Pixel pencil', eraser: 'Pixel eraser', line: 'Pixel line', shape: 'Pixel shapes' }[t];
   return t === 'eraser' ? 'Eraser' : t === 'smudge' ? 'Smudge' : t === 'fill' ? 'Fill' : t === 'select' ? 'Select and move'
-    : t === 'line' ? 'Line with ' + bn : t === 'shape' ? 'Shapes with ' + bn : bn;
+    : t === 'line' ? 'Line with ' + bn : t === 'shape' ? 'Shapes with ' + bn : t === 'text' ? 'Text: tap the canvas to place it'
+    : t === 'picker' ? 'Pick a color: tap the canvas' : t === 'hand' ? 'Move canvas: drag to move, pinch to zoom' : bn;
 }
 function updateQuick() {
-  var t = S.tool;
-  $('#qPaint').hidden = t === 'fill' || t === 'select';
-  $('#qFill').hidden = t !== 'fill'; $('#qShape').hidden = t !== 'shape'; $('#qSelect').hidden = t !== 'select';
-  if (quickSliders[1]) $('label', quickSliders[1]).textContent = t === 'smudge' ? 'Strength' : 'Opacity';
+  var t = S.tool, more = MORE_TOOLS.indexOf(t) >= 0;
+  $('#toolStrip').hidden = !more;
+  $('#moreTools').setAttribute('aria-pressed', String(more));
+  $('#qFill').hidden = t !== 'fill'; $('#qShape').hidden = t !== 'shape'; $('#qSelect').hidden = t !== 'select'; $('#qText').hidden = t !== 'text';
+  if (quickSliders[1]) quickSliders[1].setLabel(t === 'smudge' ? 'Strength' : 'Opacity');
   $$('[data-shape-kind]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.shapeKind === S.shape.kind)); });
   $$('[data-shape-fill]').forEach(function (b) { b.setAttribute('aria-pressed', String((b.dataset.shapeFill === '1') === S.shape.filled)); });
   $$('[data-sel-kind]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.selKind === S.selKind)); });
@@ -28,6 +33,7 @@ function initTools() {
   $$('[data-shape-kind]').forEach(function (b) { b.addEventListener('click', function () { S.shape.kind = b.dataset.shapeKind; updateQuick(); }); });
   $$('[data-shape-fill]').forEach(function (b) { b.addEventListener('click', function () { S.shape.filled = b.dataset.shapeFill === '1'; updateQuick(); }); });
   $$('[data-sel-kind]').forEach(function (b) { b.addEventListener('click', function () { S.selKind = b.dataset.selKind; updateQuick(); }); });
+  $('#textOpen').addEventListener('click', function () { openPanel('text'); });
   $('#selNone').addEventListener('click', function () { dropSelection(true); });
   $('#selDelete').addEventListener('click', deleteSelection);
 }

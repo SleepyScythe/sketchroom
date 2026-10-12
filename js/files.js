@@ -7,7 +7,7 @@
    The quick sketch lives under the key "current". A library image is kept under "img:<id>" until it has
    reached the cloud (see document.js), so nothing is lost if the connection drops or the tab closes. */
 var saveTimer = 0, BLENDS = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten'];
-function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveDoc, 2500); }
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveDoc, 2500); liveSoon(); }
 function setSaveState(t) { $('#saveState').textContent = t; }
 function downloadBlob(blob, name) {
   var url = URL.createObjectURL(blob), a = document.createElement('a');

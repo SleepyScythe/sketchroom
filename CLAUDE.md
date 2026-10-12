@@ -25,7 +25,7 @@ It was first built in Claude and published as a private artifact (https://claude
 
 | File | What it holds |
 | --- | --- |
-| `index.html` | Two views: `#home` (the library) and `#editor` (top bar, tool rail, canvas, tabbed dock), plus the New image / name / Move dialogs (`<dialog>`) |
+| `index.html` | Two views: `#home` (the library) and `#editor` (top bar, tool rail, canvas, and the floating panel, Layers, tools menu and tool strip), plus the dialogs (`<dialog>`: New image, name, Move, Draw together, username, profile, contact) |
 | `styles.css` | All styling, dark and light themes through CSS variables at the top |
 | `js/firebase-config.js` | `FIREBASE_CONFIG`, the public web config from the Firebase console. `null` means "no Firebase" |
 | `js/core.js` | `DOC_W` / `DOC_H` (the open image's size, changed by `setDocSize()`), `$` / `$$` helpers, SVG icons |
@@ -35,9 +35,9 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/brushes.js` | `makeSlider()`, quick sliders, `curParams()`, brush editor controls, brush library cards (Free brushes = `PRESETS` + the Firestore free library, then My brushes), the owner's suggestion cards (`renderRequests()`), brush file import/export |
 | `js/storage.js` | `store`: Google sign-in, and everything kept in accounts (free library, private brushes, fonts, saved colors, uploaded fonts, suggestions, library items, layer files in Cloud Storage), with a `localStorage` fallback. `store.ready` resolves once the first sign-in state is known. Also `renderAccount()` |
 | `js/text.js` | Google Font loading, uploaded font files (`uploadFont()`, `registerUploadedFont()`), the text tool |
-| `js/canvas.js` | Pan and zoom (`maxZoom()`), tool switching, pointer handling, brush and eraser strokes, eyedropper. `onDown` sends the other tools to `tools.js` / `select.js` / `pixel.js`, which set `drag = { id, move, end, cancel }` |
+| `js/canvas.js` | Pan and zoom (`maxZoom()`), tool switching, the Pen / Finger switch (`setInputMode`), pen pressure, pointer handling, brush and eraser strokes, eyedropper. `onDown` sends the other tools to `tools.js` / `select.js` / `pixel.js`, which set `drag = { id, move, end, cancel }` |
 | `js/color.js` | `setColor()`, the color wheel, saved and recent colors, the quick color pop-up |
-| `js/tools.js` | The quick settings at the top of the dock (`updateQuick()`, `quickTitle()`), fill (`fillAt`), line and shapes (`beginShape`), smudge (`beginSmudge`) |
+| `js/tools.js` | The tool strip over the canvas (`updateQuick()`, `quickTitle()`, `MORE_TOOLS`), fill (`fillAt`), line and shapes (`beginShape`), smudge (`beginSmudge`) |
 | `js/select.js` | Selection (rectangle or freehand) and moving the selected pixels (`S.sel`, `dropSelection()`, `deleteSelection()`) |
 | `js/pixel.js` | Pixel art: `isPixel()`, the pixel pencil and eraser (`beginPixelStroke`), pixel line and shapes (`drawPixelShape`), the pixel/tile grid (`drawGrid`), hard-edged selection masks (`hardMask`) |
 | `js/pad.js` | The test pad in the Edit tab, its pressure readout and the Pen pressure setting |
@@ -49,6 +49,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/background.js` | The generated art behind the signed-in pages: `paintBackground(canvas, settings)`, its styles (`BG_PAINTERS`), and `BG_LIBRARY`, the settings the site uses. Self-contained, so the preview page can load it alone |
 | `tools/background-preview.html` | Not linked from the site. A pretend library with an edit panel for the background art; open http://localhost:8000/tools/background-preview.html. It starts from `BG_LIBRARY`, and the current settings are in `window.bgSettings` |
 | `js/friends.js` | Friends: requests, the friends page `#/friends`, a friend's view-only library `#/u/<uid>` and the image viewer (`showFriendImage`, which draws the visible layers onto one canvas) |
+| `js/live.js` | Drawing together, live: layer shadows and pixel diffs (`liveTouch`, `liveFlush`, `liveDiff`), applying others' changes (`livePx`, `liveLayers`), `liveStart` / `liveStop`, `shareFor`, the Live badge. Loads after `document.js` |
 | `legal.html` | Terms of use, Privacy policy and Credits (with the Lucide/Feather license texts). Linked from the homepage footer and the profile page |
 | `LICENSE`, `THIRD_PARTY_NOTICES.md` | The owner's code is "all rights reserved". Third-party licenses (icons, fonts, Firebase) |
 | `js/landing.js` | The sample drawing sheet on the signed-out homepage (pencil, marker, ink, spray). Self-contained, nothing saved. Loads before `app.js` |
@@ -117,11 +118,40 @@ It was first built in Claude and published as a private artifact (https://claude
   - **What friends see:** each other's profile, and every library item with `private == false` (read only), including those images' layer PNGs. The image viewer composites the visible layers with their opacity and blend, on white (pixel art on a checkerboard). Nothing is saved, and friends can't copy or export.
   - **Notifications:** pending requests put a dot on the account button and a count on the library's Friends button.
   - **Testing note:** the accept and view paths were tested on 2026-10-12 with a fake second account created in the console (since deleted) and the Rules Playground. They have not yet been tried by two real people.
+- **Drawing together** (`live.js`, built 2026-10-12):
+  - **Sharing:** the owner of an image picks up to 5 friends in the Draw together dialog (the people button in the editor's top bar, or "Draw together…" in a card's menu). That writes `shares/{owner}_{imageId}`. Unticking everyone deletes it.
+  - **Friends' side:** shared images show under "Shared with you" at the top of their library (`watchSharedItems` follows each owner's item for the card). They open at `#/s/<owner>/<imageId>`. `openImage(id, token, { owner, item })` loads the owner's layers, and `cloudSave` saves into the owner's item and files (`doc.owner`). Friends may only change the layers, thumbnail, active layer, count and updated (the rules check it).
+  - **Live changes:** while a shared image is open (`shareFor(S.doc)`), `S.live` keeps a shadow copy of each layer.
+    - **Finding what changed:** after any change, `liveFlush` diffs the touched area against the shadow.
+    - **Sending:** it sends only the changed pixels, as `shares/{sid}/ops` docs: `px` ops (tiles up to 256 × 256, a patch PNG plus a mask PNG unless the whole tile changed) and `layers` ops (the full layer list plus deleted ids).
+    - **Receiving:** incoming ops are applied in server order to the layer and its shadow, so they're never echoed back.
+    - **Same person on two devices:** ops are skipped by tab (`LIVE_CID`), so two of your own devices also stay in sync.
+  - **Hooks:** `liveTouch` is called from `recordCrop`, `restore`, `restoreChanged`, `clearLayer` and `mergeDown`. `liveSoon` is called from `renderLayers` and `scheduleSave`. A layer with no shadow (new, duplicated, imported) is sent whole.
+  - **Opening and saving:**
+    - **Opening:** `openImage` loads the saved copy, then `liveStart` replays the ops from a minute before the item's `updated`. Drawing stays blocked until that's done.
+    - **Saving:** each person's `cloudSave` uploads the layers they changed.
+    - **Cleanup:** the owner deletes ops over 10 minutes old (and older than 5 minutes before the last save) when opening.
+  - **Starting and stopping:**
+    - **Owner:** `liveSharesChanged` starts or stops the session when the owner shares or unshares while the image is open.
+    - **Friend:** a friend who loses access gets a permission error from the ops listener and is sent to the library (`liveLost`).
+  - **New images:** an image with no saved layers gets a first layer id made from the image id (`'l' + id`), so everyone starts on the same layer.
+  - **Known limits:**
+    - Two people changing the very same pixels at the same moment can end up slightly different until the next save.
+    - Soft edges lose a little color precision through PNG.
+    - There's no presence list yet (the Live pill's tooltip names the people the image is shared with), and no live cursor.
+  - **Testing note (2026-10-12):**
+    - Two tabs with a fake server (BroadcastChannel) matched pixel for pixel: strokes, layers, undo, delete, fill, and crossing strokes drawn at once.
+    - Two tabs of the owner's account through Firestore synced in about 0.3 s, and the image reopened with both layers.
+    - The friend's read access to the item, its ops and its layer files, and a stranger's denial, were checked in the Rules Playground with a temporary test friend (deleted).
+    - **Not yet tried:** two real people.
 - **Contact form:** writes to `messages`. Only admins read them, in the inbox on their profile page. An unread message adds a dot to the account button.
 - Brush settings live in one object (keys in `BASE` and `SCHEMA` in `config.js`). Saved brushes are `{ name, params, at }`, plus `by` (the admin's uid) in the free library, and each carries `where` (`'library'` or `'mine'`) in the app.
 - A stroke: `Engine` stamps a pre-rendered tip along the path at `spacing`. Brushes draw into the separate `buffer` canvas shown above the active layer at the brush's opacity, then composite onto the layer when the pen lifts. The eraser draws straight onto the layer with `destination-out`. `Engine.stamp()` spreads alpha across overlapping stamps (`this.norm`), so Flow and pen pressure show.
-- Undo: each stroke stores before/after crops of its bounding box, and layer operations store closures. History is capped at 80 entries and resets when another image opens.
-- Touch: once a pen has been seen, one finger pans and two fingers pinch-zoom. Before that, a finger draws.
+- Undo: each stroke stores before/after crops of its bounding box, and layer operations store closures. History is capped at 80 entries and resets when another image opens. Undo and redo of a stroke only put back the pixels that stroke changed (`restoreChanged`), so a friend's nearby changes survive while drawing together.
+- **Pen / Finger switch** (bottom of the rail, `S.inputMode`, localStorage `sketchroom.input`, the owner asked for it on 2026-10-12):
+  - **Pen:** pens and the mouse draw, and a finger moves the canvas (one finger pans, two pinch-zoom).
+  - **Finger:** fingers, pens and the mouse all draw. Two fingers still pinch-zoom.
+  - **Not set yet:** the first pen stroke switches it to Pen, with a toast.
 - **Pen pressure** (`canvas.js`): each pen stroke (brush, eraser, smudge and the test pad) uses `newPressure()` / `samplePressure()` / `finishPressure()`. Each sample records three sources:
   - `'pointer'`: the pointer event's pressure.
   - `'force'`: Safari's stylus `Touch.force`, from touch events tracked by `trackStylus`.
@@ -136,7 +166,12 @@ It was first built in Claude and published as a private artifact (https://claude
   - **Fingers and mouse:** always draw at full pressure.
   - **Why:** a stuck low value made every pressure brush thin and faint.
 - Shortcuts: B brush, E eraser, S smudge, G fill, L line, U shapes, M select, T text, I eyedropper, H or hold Space to pan, [ and ] change size, Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z redo. Esc closes the color pop-up. Esc or Enter drops a selection, and Delete clears the selected pixels.
-- **Tools and the quick panel:** the top of the dock shows the current tool's settings. `#qPaint` holds Size and Opacity, relabeled "Strength" for smudge. `#qFill`, `#qShape` and `#qSelect` belong to their tools.
+- **The editor layout** (redesigned 2026-10-12 at the owner's request):
+  - **The rail:** Brush, Eraser, the color chip, **…** (the other tools in a menu, `MORE_TOOLS`), the tall Size and Opacity sliders (`makeVSlider`, relabeled "Strength" for smudge), Layers, and the Pen / Finger switch.
+  - **Popouts:** the top bar's Brushes button opens a floating panel with the Brushes, Edit, Color and Text tabs (`openPanel`, `showTab`). Layers opens its own popout next to the rail. They float over the canvas (`.pop`, absolutely placed in `.work`), so opening or closing them never resizes the canvas area, and the zoom stays where it was (the owner asked for this). The panel and Layers stay open while drawing.
+  - **Tool strip:** while a tool from the … menu is picked, a strip at the top of the canvas names it and holds its settings (`#qFill`, `#qShape`, `#qSelect`, `#qText`). On narrow screens it hides while the panel is open.
+  - **Removed:** the four-corners Fit button. Zoom with −, 100%, +, pinch, the mouse wheel or Ctrl and +/−.
+  - **Phones:** the top bar can't widen the page (`.app` has a `minmax(0, 1fr)` column) and the drawing's title shrinks first. Before that fix, the header stretched the editor wider than the screen.
   - **Lock:** `L.locked` stops every tool, Clear and Merge, all through `canDraw(L)`.
   - **Fill:** a scanline flood fill on the active layer (or all visible layers), with a Tolerance setting and premultiplied color comparison. It adds a 2px ring painted with `destination-over`, so it tucks under antialiased edges (no ring for pixel art).
   - **Line and Shapes:** use the current brush with smoothing 0, preview in `buffer`, and land as one undo step. Shift snaps lines to 15° steps and makes shapes square or round.
@@ -146,7 +181,7 @@ It was first built in Claude and published as a private artifact (https://claude
 - **Color:** always change color through `setColor(hex, remember, hsv)`. `S.hsv` keeps hue and saturation at black, white and greys.
   - Saved colors (`S.saved`, max 60) live in `users/{uid}/settings/colors` when signed in, or in `localStorage` when signed out.
   - Recent is per browser.
-  - The color pop-up opens from `#colorChip` under the hand tool. It stays open while drawing (the owner asked for this) and closes from the chip, ×, Esc, or a tap elsewhere in the interface.
+  - The color pop-up opens from `#colorChip` on the rail, beside it. It stays open while drawing (the owner asked for this) and closes from the chip, ×, Esc, or a tap elsewhere in the interface.
 
 ## Hosting and accounts
 
@@ -168,6 +203,8 @@ It was first built in Claude and published as a private artifact (https://claude
   - `users/{uid}/items/{id}`: the library (see "How it works"). Friends can read items with `private == false`.
   - `users/{uid}/friends/{friendUid}`: `{ since }`, readable only by `uid`. Written on both sides when a request is accepted.
   - `friendRequests/{from}_{to}`: `{ from, to, at }`, readable and deletable by those two people. Can only be sent to someone with a profile who isn't already a friend.
+  - `shares/{owner}_{imageId}`: `{ owner, image, members (up to 5 of the owner's friends), name, at }`, written only by the owner. Members can read and update that image's item (limited fields) and read and write its layer files.
+  - `shares/{sid}/ops/{opId}`: live changes `{ by, at (server time), seq, cid, kind: 'px' | 'layers', … }`. The owner and members read and create them. The author or the owner deletes them.
   - `requests/{uid}_{brushId}`: a tester's suggestion for the free library. Admins Add or Decline it in the Brushes tab.
   - `profiles/{uid}`: the public profile `{ username, displayName, bio, pronouns, location, links, avatar, color, joined, updated }`. Any signed-in person can read it, and only its owner can write it.
   - `usernames/{name}`: `{ uid }` reserves a username. It is create-only. `store.saveProfile` writes the profile and the new name, and deletes the old name, in one batch, and the rules check both sides with `getAfter`, so names are unique.
@@ -176,6 +213,7 @@ It was first built in Claude and published as a private artifact (https://claude
 - **Making someone an admin:** they sign in once. In Firebase console > Authentication > Users, copy their User UID. In Firestore > Data, add a document with that UID as its ID to the `admins` collection, with any field (for example `note: "owner"`). Only the console can write `admins`.
 - **Security rules:** `firestore.rules` and `storage.rules`. After editing one, paste it into Firebase console > Firestore Database > Rules (or Storage > Rules) and press Publish.
   - **Storage reads Firestore:** the Storage rules call `firestore.exists()` / `firestore.get()` to check friendship and the item's `private` flag. That needed a one-time IAM role for the Storage service account. The owner approved it, and it was attached from the console's "Provision cross-service rules" dialog on 2026-10-12. Each friend's layer download costs a couple of Firestore reads.
+  - **Drawing together:** the rules for `shares` and its ops, the members' access to the item and its layer files, and the friend check (up to 5 members, one `exists` each) were published on 2026-10-12.
   - **Order:** publish rules before pushing code that writes new fields (`validItem` uses `hasOnly`, so the old rules reject unknown fields).
 - **Authorized domains:** sign-in only works on domains listed in Authentication > Settings > Authorized domains (`localhost`, `sketchroom-abab3.firebaseapp.com`, `sketchroom-abab3.web.app`, `sleepyscythe.github.io`).
 - **Fallback:** if `FIREBASE_CONFIG` is `null`, the SDK fails to load, or the page is opened from `file://`, then `store.online` is false. The homepage then offers only the quick sketch, and brushes and fonts use `localStorage`.
@@ -257,6 +295,18 @@ There is no test suite. Check changes by serving the folder (see "Running locall
 - open each other's libraries, folders and images
 - make an item private and confirm it disappears for the friend
 - remove the friend
+
+**Drawing together** (two accounts that are friends, or two tabs of one account for the owner's side):
+- share an image with a friend from the editor's people button. It shows under Shared with you for them
+- both open it: strokes, new and deleted layers, layer opacity and undo show up on the other side
+- leave and reopen: everything drawn is still there
+- untick the friend: their open copy goes back to the library
+
+**Editor layout:**
+- the … menu picks a tool and closes, and the tool strip shows its settings
+- the rail sliders change size and opacity
+- the panel and Layers open and close without moving the zoom
+- the Pen / Finger switch: in Pen a finger moves the canvas, and in Finger it draws
 
 **Tools:**
 - fill inside an outline

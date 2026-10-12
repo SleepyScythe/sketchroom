@@ -32,7 +32,7 @@ html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font-ui); overflow: hidden; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-.app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
 
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -40,7 +40,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .mark { width: 26px; height: 26px; flex: none; fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
 .logo { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: -0.01em; }
 .savestate { color: var(--mute); font-size: 12px; white-space: nowrap; }
-.top-actions { display: flex; align-items: center; gap: 4px; }
+.top-actions { display: flex; align-items: center; gap: 4px; flex: none; }
 .sep { width: 1px; height: 22px; background: var(--line); margin: 0 6px; }
 .zoomval { font: inherit; font-variant-numeric: tabular-nums; color: var(--fg); background: none; border: 0; min-width: 52px; cursor: pointer; padding: 6px; border-radius: 8px; }
 .zoomval:hover { background: var(--panel2); }
@@ -64,9 +64,57 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .menu-note { color: var(--mute); font-size: 12px; padding: 6px 10px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn.account { max-width: 140px; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.work { display: grid; min-height: 0; grid-template-columns: 56px minmax(0, 1fr) 330px; grid-template-areas: "tools vp dock"; }
-.tools { grid-area: tools; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; scrollbar-width: none; }
-.tools .chip { flex: none; margin-top: 6px; }
+/* The editor: a slim rail and the canvas. Everything else floats over the canvas (.pop, .toolstrip), so opening or
+   closing a panel never resizes the canvas area and the zoom stays where it was. */
+.work { --rail: 60px; position: relative; display: grid; min-height: 0; grid-template-columns: var(--rail) minmax(0, 1fr); grid-template-areas: "tools vp"; }
+.tools { grid-area: tools; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.tools > * { flex: none; }
+.tools .chip { margin: 2px 0; }
+.tools .vhost { flex: 1 1 150px; min-height: 96px; max-height: 190px; display: flex; }
+/* The tall size and opacity sliders on the rail */
+.vslider { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 0; cursor: ns-resize; touch-action: none; user-select: none; -webkit-user-select: none; border-radius: 10px; outline: none; }
+.vslider:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.vtrack { position: relative; flex: 1; width: 26px; border-radius: 13px; background: var(--panel2); border: 1px solid var(--line); overflow: hidden; }
+.vfill { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(86, 196, 180, 0.35); background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.vthumb { position: absolute; left: 3px; right: 3px; height: 6px; margin-bottom: -3px; border-radius: 3px; background: var(--fg); }
+.vslider.active .vtrack { border-color: var(--accent); }
+.vname { font-size: 10px; color: var(--mute); line-height: 1; }
+.vbubble { position: fixed; z-index: 45; transform: translateY(-50%); background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; font-size: 13px; font-variant-numeric: tabular-nums; box-shadow: 0 6px 18px var(--shadow); pointer-events: none; white-space: nowrap; }
+/* Floating popouts */
+.pop { position: absolute; z-index: 35; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 40px var(--shadow); }
+.pophead { display: flex; align-items: center; gap: 6px; padding: 4px 6px 0 14px; border-bottom: 1px solid var(--line); }
+.pophead h2 { flex: 1; margin: 8px 0; font-family: var(--font-display); font-size: 16px; }
+.pophead .tabs { flex: 1; border-bottom: 0; }
+.toolspop { left: calc(var(--rail) + 8px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 8px; width: 260px; }
+.toolspop button { display: flex; align-items: center; gap: 8px; font: inherit; color: var(--fg); background: none; border: 0; border-radius: 9px; padding: 9px 10px; cursor: pointer; text-align: left; }
+.toolspop button:hover { background: var(--panel2); }
+.toolspop button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.toolspop button svg { width: 20px; height: 20px; flex: none; }
+.layerspop { left: calc(var(--rail) + 8px); width: min(320px, calc(100% - var(--rail) - 16px)); max-height: calc(100% - 16px); display: flex; flex-direction: column; }
+.panelpop { right: 10px; top: 10px; width: min(360px, calc(100% - var(--rail) - 20px)); max-height: calc(100% - 20px); display: flex; flex-direction: column; }
+.layerspop .pane, .panelpop .pane { flex: 1 1 auto; }
+.panelbtn { display: inline-flex; align-items: center; gap: 6px; }
+.panelbtn svg { width: 18px; height: 18px; }
+.panelbtn[aria-expanded="true"] { border-color: var(--accent); }
+.ibtn[aria-expanded="true"] { background: var(--panel2); box-shadow: inset 0 0 0 1px var(--accent); }
+/* The pen or finger switch at the bottom of the rail */
+.modebtn { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 46px; padding: 6px 0 5px; margin-top: auto; font: inherit; color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.modebtn svg { width: 20px; height: 20px; }
+.modebtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+/* Drawing together */
+.livebadge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--accent-fg); background: var(--accent); margin-right: 4px; white-space: nowrap; }
+.livebadge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.livebadge.offline { background: var(--panel2); color: var(--mute); border: 1px solid var(--line); }
+.sharedsection { display: flex; flex-direction: column; gap: 12px; }
+.sectiontitle { margin: 4px 0 0; font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--mute); }
+.movelist input[type="checkbox"] { accent-color: var(--accent); }
+/* Settings for the tools behind "…", at the top of the canvas. Moves out of the panel's way when it's open. */
+.toolstrip { position: absolute; z-index: 30; top: 10px; left: calc(var(--rail) + 10px); right: 10px; margin: 0 auto; width: max-content; max-width: min(560px, calc(100% - var(--rail) - 20px)); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px var(--shadow); }
+.work.panelopen .toolstrip { right: calc(min(360px, 100% - var(--rail) - 20px) + 20px); max-width: calc(100% - var(--rail) - min(360px, 100% - var(--rail) - 20px) - 40px); }
+.toolstrip .who { font-family: var(--font-display); font-weight: 600; font-size: 14px; }
+.toolstrip .qgroup { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.toolstrip .qgroup .row { min-width: 150px; }
+.toolstrip .hint { flex-basis: 100%; }
 .chip { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--fg); cursor: pointer; padding: 0; background: #222831; }
 
 .viewport { grid-area: vp; position: relative; overflow: hidden; background: var(--stage); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; min-width: 0; min-height: 0; }
@@ -84,9 +132,6 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: calc(100% - 32px); background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; box-shadow: 0 8px 24px var(--shadow); z-index: 10; opacity: 0; pointer-events: none; transition: opacity 0.18s; text-align: center; }
 #toast.show { opacity: 1; }
 
-.dock { grid-area: dock; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.quick { padding: 12px 14px 8px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); }
-.quick .who { font-family: var(--font-display); font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tabs { display: flex; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .tab { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--mute); padding: 10px 8px; font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
 .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
@@ -321,14 +366,14 @@ textarea { resize: vertical; min-height: 64px; }
 .movelist input { accent-color: var(--accent); }
 
 @media (max-width: 860px) {
-  .work { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) minmax(0, 42%); grid-template-areas: "tools" "vp" "dock"; }
-  /* The rail becomes a top bar that scrolls sideways when the tools don't fit. Auto margins center it when they do. */
-  .tools { flex-direction: row; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; padding: 6px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .tools > :first-child { margin-left: auto; }
-  .tools .chip { margin: 0 auto 0 6px; }
-  .dock { border-left: 0; border-top: 1px solid var(--line); }
-  .quick { padding: 8px 14px 6px; }
+  .work { --rail: 54px; }
   .zoomgroup, .savestate { display: none; }
+  .panelbtn .lbl { display: none; }
+  .panelbtn { padding: 7px 9px; }
+  #editor .top { padding: 6px 8px; gap: 6px; }
+  #editor .top-actions .sep { display: none; }
+  /* On narrow screens the open panel covers much of the canvas, so the tool strip waits until it closes. */
+  .work.panelopen .toolstrip { display: none; }
   .hgrid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }

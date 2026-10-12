@@ -47,6 +47,7 @@ function showDocLoading(on) { $('#docLoading').hidden = !on; }
 async function openSketch() {
   var rec = await idbGet('current');
   S.doc = { id: 'sketch', local: true, name: 'Quick sketch', px: cleanPx(rec && rec.px) };
+  renderLiveBadge();
   setDocSize(rec && rec.w || 1600, rec && rec.h || 1200); applyDocMode();
   var out = null;
   if (rec && rec.layers && rec.layers.length) { try { out = await layersFromRecord(rec); } catch (e) { out = null; } }
@@ -55,13 +56,18 @@ async function openSketch() {
   setSaveState(out ? 'Restored from this device' : ''); fit();
 }
 
-async function openImage(id, token) {
-  var it = S.items[id];
+// src: { owner, item } for an image a friend shared with you. Otherwise it's yours, from S.items.
+async function openImage(id, token, src) {
+  var owner = (src && src.owner) || S.myId, it = (src && src.item) || S.items[id];
   // loading: the canvas holds a blank placeholder until the layers arrive, so nothing may be saved yet.
-  S.doc = { id: id, local: false, loading: true, name: it.name, px: cleanPx(it.px), saved: (it.layers || []).map(function (m) { return m.id; }) };
+  S.doc = { id: id, owner: owner, local: false, loading: true, name: it.name, px: cleanPx(it.px), saved: (it.layers || []).map(function (m) { return m.id; }) };
+  renderLiveBadge();
   clearTimeout(saveTimer); clearTimeout(cloudTimer);
   setDocSize(it.w || 1600, it.h || 1200); applyDocMode();
   var blank = makeLayer('Layer 1'); useLayers([blank], blank.id, 1); fit();
+  // A new image has no saved layers yet. Its first layer's id comes from the image, so everyone drawing together on it
+  // starts with the same layer.
+  if (!(it.layers || []).length) blank.id = 'l' + id;
   showDocLoading(true); setSaveState('');
   var out = null, active = it.active, count = it.count, rec = await idbGet('img:' + id);
   if (token !== routeToken) return;
@@ -70,7 +76,7 @@ async function openImage(id, token) {
     try { out = await layersFromRecord(rec); active = rec.active; count = rec.count; out.forEach(function (L) { L.dirty = true; }); } catch (e) { out = null; }
   }
   if (!out && it.layers && it.layers.length) {
-    try { out = await layersFromCloud(id, it.layers); }
+    try { out = await layersFromCloud(id, it.layers, owner); }
     catch (e) {
       if (token !== routeToken) return;
       S.doc.broken = true; showDocLoading(false);
@@ -80,17 +86,22 @@ async function openImage(id, token) {
   }
   if (token !== routeToken) return;
   if (out) useLayers(out, active, count);
+  // Drawing together: catch up on changes made since the last save before anyone can draw.
+  if (shareFor(S.doc)) {
+    await liveStart(owner + '_' + id, (it.updated || Date.now()) - 60000);
+    if (token !== routeToken) return;
+  }
   S.doc.loading = false;
   showDocLoading(false); fit();
   if (S.pendingImport && S.pendingImport.id === id) await applyImport(S.pendingImport);
   if (S.layers.some(function (L) { return L.dirty; })) scheduleCloudSave(800);
 }
-async function layersFromCloud(id, metas) {
+async function layersFromCloud(id, metas, owner) {
   return Promise.all(metas.map(async function (m) {
     var L = makeLayer(String(m.name || 'Layer'));
     L.id = m.id; L.visible = m.visible !== false; L.opacity = m.opacity == null ? 1 : clamp(Number(m.opacity) || 0, 0, 1);
     L.blend = BLENDS.indexOf(m.blend) >= 0 ? m.blend : 'normal'; L.locked = !!m.locked;
-    var blob = await store.downloadLayer(id, m.id);
+    var blob = await store.downloadLayer(id, m.id, owner);
     if (blob) { var bm = await createImageBitmap(blob); L.ctx.drawImage(bm, 0, 0); if (bm.close) bm.close(); }
     L.dirty = !blob; return L;
   }));
@@ -145,17 +156,21 @@ async function cloudSave() {
     for (var i = 0; i < layers.length; i++) {
       var L = layers[i]; if (!L.dirty) continue;
       L.dirty = false; // set first, so a stroke made during the upload marks it again
-      try { await store.uploadLayer(doc.id, L.id, await canvasBlob(L.canvas)); } catch (e) { L.dirty = true; throw e; }
+      try { await store.uploadLayer(doc.id, L.id, await canvasBlob(L.canvas), doc.owner); } catch (e) { L.dirty = true; throw e; }
     }
     var gone = (doc.saved || []).filter(function (x) { return ids.indexOf(x) < 0; });
-    for (var j = 0; j < gone.length; j++) await store.deleteLayer(doc.id, gone[j]);
+    for (var j = 0; j < gone.length; j++) await store.deleteLayer(doc.id, gone[j], doc.owner);
     var patch = {
       layers: layers.map(function (L) { return { id: L.id, name: L.name, visible: L.visible, opacity: L.opacity, blend: L.blend, locked: L.locked }; }),
       updated: Date.now()
     };
     // Size, thumbnail and active layer come from the canvas, so only while this image is still the one open.
-    if (doc === S.doc) { patch.active = S.active.id; patch.count = layerCount; patch.w = DOC_W; patch.h = DOC_H; patch.px = doc.px || null; patch.thumb = makeThumb(); }
-    await store.updateItem(doc.id, patch);
+    // Friends drawing on a shared image may only change the layers, thumbnail and these (the rules check it).
+    if (doc === S.doc) {
+      patch.active = S.active.id; patch.count = layerCount; patch.thumb = makeThumb();
+      if (doc.owner === S.myId) { patch.w = DOC_W; patch.h = DOC_H; patch.px = doc.px || null; }
+    }
+    await store.updateItem(doc.id, patch, doc.owner);
     doc.saved = ids;
     if (doc === S.doc) {
       var clean = !S.layers.some(function (x) { return x.dirty; }) && !cloudAgain;
@@ -174,8 +189,9 @@ async function cloudSave() {
 // Saves everything before leaving the image (back to the library, another image, signing out).
 async function leaveDoc() {
   var doc = S.doc; if (!doc) return;
-  if (doc.loading || doc.broken) { clearTimeout(saveTimer); clearTimeout(cloudTimer); return; } // nothing real to save
+  if (doc.loading || doc.broken) { clearTimeout(saveTimer); clearTimeout(cloudTimer); liveStop(true); return; } // nothing real to save
   abortStroke(); dropSelection(true);
+  await liveStop(); // send the last changes to anyone drawing along
   clearTimeout(saveTimer);
   if (H.undo.length || S.layers.some(function (L) { return L.dirty; })) await saveDoc();
   if (!doc.local && !doc.broken) {
