@@ -196,7 +196,7 @@ It was first built in Claude and published as a private artifact (https://claude
 
 - **Site:** GitHub Pages, served from the `main` branch, root folder, at https://sleepyscythe.github.io/sketchroom/ (repo https://github.com/SleepyScythe/sketchroom). Pushing to `main` publishes the site within about a minute. The repo must stay public for free Pages.
 - **Firebase project:** `sketchroom-abab3`, owned by the owner's Google account. Console: https://console.firebase.google.com/project/sketchroom-abab3
-  - **Plan:** Blaze (pay as you go) since 2026-10-11. The owner set a $5 budget alert themselves.
+  - **Plan:** Blaze (pay as you go) since 2026-10-11. Monthly budget alert ("Firebase Project sketchroom-abab3" in Google Cloud > Billing > Budgets & alerts): $5, raised to $20 on 2026-10-12 at the owner's request, emailing at 50%, 90% and 100%. It only alerts, it doesn't stop spending (no spend cap is set). The billing account was on a free trial with $300 credit.
   - **Firestore:** in `nam5`. Google Analytics and Gemini are off.
   - **Cloud Storage:** default bucket `gs://sketchroom-abab3.firebasestorage.app` in US-EAST1, a no-cost location, so the free allowance applies. Its **CORS** allows GET from `https://sleepyscythe.github.io` and `http://localhost:8000`. It was set from Google Cloud Shell:
     ```
