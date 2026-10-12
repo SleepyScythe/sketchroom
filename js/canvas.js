@@ -37,17 +37,69 @@ function setTool(t) {
 /* ---------- pointer handling ---------- */
 // cur is a brush or eraser stroke. drag is any other tool's press-and-drag ({ id, move(e), end(e), cancel() }), from tools.js and select.js.
 var pointers = new Map(), cur = null, drag = null, panState = null, pinch = null, spaceDown = false;
-function readPressure(type, ev, parent, lastP) {
-  if (type !== 'pen') return 1;
+/* ---------- pen pressure ----------
+   Pens report pressure in pointer events, but some send the same value for a whole stroke: styluses with no pressure
+   sensor (Apple Pencil USB-C, Logitech Crayon and others), and some iPad Safari versions, where the Pencil's force still
+   arrives in touch events. The owner's iPad sent 0.12 for every point (2026-10-12), which also drew every pressure brush
+   thin and faint. So each pen stroke records three sources, and after each stroke the best one is remembered for this
+   browser (S.pen.src): 'pointer' (pointer event pressure), 'force' (the stylus touch's force) or 'speed' (made up from
+   drawing speed: slow is heavy, fast is light). S.pen.mode, set in the Edit tab: 'auto' uses src, 'pen' always uses the
+   pointer, 'speed' always simulates, 'off' is always full pressure. Fingers and the mouse always draw at full pressure. */
+var PEN_KEY = 'sketchroom.pen', FLAT = 0.002;
+S.pen = { mode: 'auto', src: 'pointer' };
+try { var savedPen = JSON.parse(localStorage.getItem(PEN_KEY)); if (savedPen) Object.assign(S.pen, savedPen); } catch (e) { /* storage unavailable */ }
+function savePen() { try { localStorage.setItem(PEN_KEY, JSON.stringify(S.pen)); } catch (e) { /* storage unavailable */ } }
+// The latest force of a stylus touch (Safari only). Touch events arrive alongside pointer events, so this lags by a frame at most.
+var stylusForce = { f: 0, t: 0 };
+function trackStylus(e) {
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    if (t.touchType === 'stylus' && t.force > 0) { stylusForce.f = t.force > 1 ? Math.min(1, t.force / 4.17) : t.force; stylusForce.t = performance.now(); }
+  }
+}
+document.addEventListener('touchstart', trackStylus, { passive: true, capture: true });
+document.addEventListener('touchmove', trackStylus, { passive: true, capture: true });
+// One per stroke. lo/hi: the pressure used; plo/phi and flo/fhi: what the pointer and the touch force sent.
+function newPressure(type) {
+  return { type: type, n: 0, fn: 0, lo: 1, hi: 0, plo: 1, phi: 0, flo: 1, fhi: 0, plast: 0.5, sp: 0.5, prev: null };
+}
+function samplePressure(st, ev, parent) {
+  if (st.type !== 'pen') return 1;
   var p = ev.pressure;
   if (!(p > 0)) p = parent && parent.pressure;
-  if (!(p > 0)) p = lastP || 0.5;
-  return p;
+  if (!(p > 0)) p = st.plast;
+  st.plast = p; st.n++; if (p < st.plo) st.plo = p; if (p > st.phi) st.phi = p;
+  var now = performance.now(), f = now - stylusForce.t < 120 ? stylusForce.f : 0;
+  if (f > 0) { st.fn++; if (f < st.flo) st.flo = f; if (f > st.fhi) st.fhi = f; }
+  // Speed in screen pixels per millisecond, eased so the line swells and thins smoothly. Strokes start light.
+  var t = ev.timeStamp || now;
+  if (st.prev) {
+    var v = Math.hypot(ev.clientX - st.prev.x, ev.clientY - st.prev.y) / Math.max(1, t - st.prev.t);
+    st.sp += (clamp(1.1 - v * 0.45, 0.15, 1) - st.sp) * 0.25;
+  }
+  st.prev = { x: ev.clientX, y: ev.clientY, t: t };
+  var mode = S.pen.mode, src = mode === 'auto' ? S.pen.src : mode === 'pen' ? 'pointer' : mode;
+  var used = src === 'off' ? 1 : src === 'speed' ? st.sp : src === 'force' && f > 0 ? f : p;
+  if (used < st.lo) st.lo = used; if (used > st.hi) st.hi = used;
+  return used;
 }
-function showPressure(type, lo, hi) {
+// After a pen stroke: learn which source works. A real pressure sensor never sends exactly the same value for a whole stroke.
+function finishPressure(st) {
+  if (st.type !== 'pen' || st.n < 6) return;
+  var src = st.phi - st.plo >= FLAT ? 'pointer' : st.fn >= 6 && st.fhi - st.flo >= 0.02 ? 'force' : 'speed';
+  if (src !== S.pen.src) { S.pen.src = src; savePen(); }
+}
+function showPressure(st) {
   var el = $('#pressureReadout'); if (!el) return;
-  if (type === 'pen') el.textContent = 'Pen pressure that stroke: ' + lo.toFixed(2) + ' to ' + hi.toFixed(2) + (hi - lo < 0.03 ? '. That is flat, so the pen is not sending varying pressure here.' : '.');
-  else el.textContent = 'Fingers and mouse draw at full pressure. Use the Pencil to test pressure.';
+  if (st.type !== 'pen') { el.textContent = 'Fingers and the mouse draw at full pressure. Use your pen to test pressure.'; return; }
+  var range = function (a, b) { return a.toFixed(2) + ' to ' + b.toFixed(2); }, mode = S.pen.mode;
+  var sent = 'Your pen sent ' + range(st.plo, st.phi) + (st.fn ? ' (touch force ' + range(st.flo, st.fhi) + ')' : '') + '. ';
+  if (mode === 'off') el.textContent = sent + 'Pressure is off, so every stroke is at full pressure.';
+  else if (mode === 'speed') el.textContent = sent + 'Pressure comes from your drawing speed: ' + range(st.lo, st.hi) + '.';
+  else if (mode === 'pen') el.textContent = sent + (st.phi - st.plo < FLAT ? 'That is flat, so this pen may not sense pressure. Try Automatic.' : 'Using it as is.');
+  else if (S.pen.src === 'speed') el.textContent = sent + 'That never changes, so your pen probably has no pressure sensor. Sketchroom now makes pressure from your drawing speed: slow strokes are heavier, fast ones lighter.';
+  else if (S.pen.src === 'force') el.textContent = sent + 'The pen\'s touch force changes, so Sketchroom uses that.';
+  else el.textContent = 'Pen pressure that stroke: ' + range(st.plo, st.phi) + '.';
 }
 function startPan(e) { panState = { id: e.pointerId, sx: e.clientX, sy: e.clientY, vx: S.view.x, vy: S.view.y }; vp.style.cursor = 'grabbing'; }
 function touchList() { var a = []; pointers.forEach(function (p, id) { if (p.type === 'touch') a.push({ id: id, x: p.x, y: p.y }); }); return a; }
@@ -123,15 +175,14 @@ function beginStroke(e) {
     buffer.style.opacity = (b.opacity / 100) * L.opacity; buffer.style.mixBlendMode = L.blend;
     stage.insertBefore(buffer, L.canvas.nextSibling); target = bctx;
   }
-  cur = { id: e.pointerId, L: L, snap: snap, eng: new Engine(target, b, color, 1, isEr ? b.opacity / 100 : 1), isEr: isEr, b: b, raw: null, type: e.pointerType, last: 0.5, lo: 1, hi: 0 };
+  cur = { id: e.pointerId, L: L, snap: snap, eng: new Engine(target, b, color, 1, isEr ? b.opacity / 100 : 1), isEr: isEr, b: b, raw: null, pr: newPressure(e.pointerType) };
   addPoints(e);
 }
 function addPoints(e) {
   var list = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
   if (!list.length) list = [e];
   for (var i = 0; i < list.length; i++) {
-    var ev = list[i], pos = docPos(ev), pr = readPressure(cur.type, ev, e, cur.last);
-    cur.last = pr; if (pr < cur.lo) cur.lo = pr; if (pr > cur.hi) cur.hi = pr;
+    var ev = list[i], pos = docPos(ev), pr = samplePressure(cur.pr, ev, e);
     cur.raw = { x: pos.x, y: pos.y, p: pr };
     cur.eng.add(cur.raw.x, cur.raw.y, cur.raw.p);
   }
@@ -140,7 +191,8 @@ function endStroke() {
   if (!cur) return;
   var c = cur; cur = null;
   c.eng.finish(c.raw);
-  if (!c.isEr) showPressure(c.type, c.lo, c.hi);
+  finishPressure(c.pr);
+  if (!c.isEr) showPressure(c.pr);
   if (c.isEr) { c.L.ctx.globalCompositeOperation = 'source-over'; c.L.ctx.globalAlpha = 1; }
   else { c.L.ctx.globalAlpha = c.b.opacity / 100; c.L.ctx.drawImage(buffer, 0, 0); c.L.ctx.globalAlpha = 1; buffer.remove(); }
   recordCrop(c.L, c.snap, c.eng.bb);

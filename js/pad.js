@@ -18,8 +18,7 @@ function initPad() {
     var list = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     if (!list.length) list = [e];
     for (var i = 0; i < list.length; i++) {
-      var ev = list[i], pr = readPressure(st.type, ev, e, st.last);
-      st.last = pr; if (pr < st.lo) st.lo = pr; if (pr > st.hi) st.hi = pr;
+      var ev = list[i], pr = samplePressure(st.pr, ev, e);
       st.raw = { x: (ev.clientX - r.left) * k, y: (ev.clientY - r.top) * k, p: pr };
       st.eng.add(st.raw.x, st.raw.y, st.raw.p);
     }
@@ -31,15 +30,17 @@ function initPad() {
     var r = cv.getBoundingClientRect(), k = cv.width / r.width;
     bsg.setTransform(1, 0, 0, 1, 0, 0); bsg.clearRect(0, 0, base.width, base.height); bsg.drawImage(cv, 0, 0);
     bg.setTransform(1, 0, 0, 1, 0, 0); bg.globalAlpha = 1; bg.clearRect(0, 0, buf.width, buf.height);
-    st = { id: e.pointerId, type: e.pointerType, last: 0.5, lo: 1, hi: 0, raw: null, eng: new Engine(bg, S.brush, cssVar('--fg'), Math.max(0.2, S.view.s * k), 1) };
+    st = { id: e.pointerId, pr: newPressure(e.pointerType), raw: null, eng: new Engine(bg, S.brush, cssVar('--fg'), Math.max(0.2, S.view.s * k), 1) };
     add(e);
   });
   cv.addEventListener('pointermove', function (e) { if (st && e.pointerId === st.id) add(e); });
   var end = function (e) {
     if (!st || e.pointerId !== st.id) return;
-    st.eng.finish(st.raw); compose(); showPressure(st.type, st.lo, st.hi); st = null;
+    st.eng.finish(st.raw); compose(); finishPressure(st.pr); showPressure(st.pr); st = null;
   };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  var mode = $('#penMode'); mode.value = S.pen.mode;
+  mode.addEventListener('change', function () { S.pen.mode = mode.value; savePen(); });
   $('#padClear').addEventListener('click', function () {
     bsg.clearRect(0, 0, base.width, base.height); g.clearRect(0, 0, cv.width, cv.height);
     $('#pressureReadout').textContent = 'Draw on the pad above to try this brush and see the pressure your pen sends.';

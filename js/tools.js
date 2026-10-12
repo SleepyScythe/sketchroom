@@ -174,7 +174,7 @@ function beginSmudge(e, pos) {
   var snap = crop(L.canvas, 0, 0, DOC_W, DOC_H), bb = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
   var corner = function (v) { return Math.round(v - d / 2); };
   cg.drawImage(L.canvas, corner(pos.x), corner(pos.y), d, d, 0, 0, d, d);
-  var step = Math.max(1, d * 0.1), last = { x: pos.x, y: pos.y }, acc = 0, lastP = 0.5;
+  var step = Math.max(1, d * 0.1), last = { x: pos.x, y: pos.y }, acc = 0, pst = newPressure(type);
   var dab = function (x, y, p) {
     var st = clamp(b.opacity / 100, 0.01, 0.95) * (type === 'pen' ? 0.3 + 0.7 * p : 1), x0 = corner(x), y0 = corner(y);
     tg.globalCompositeOperation = 'copy'; tg.drawImage(carry, 0, 0);
@@ -194,9 +194,9 @@ function beginSmudge(e, pos) {
     id: e.pointerId,
     move: function (ev) {
       var list = ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev]; if (!list.length) list = [ev];
-      list.forEach(function (c) { var q = docPos(c), pr = readPressure(type, c, ev, lastP); lastP = pr; to(q.x, q.y, pr); });
+      list.forEach(function (c) { var q = docPos(c); to(q.x, q.y, samplePressure(pst, c, ev)); });
     },
-    end: function () { if (bb.x1 > bb.x0) recordCrop(L, snap, bb); },
+    end: function () { finishPressure(pst); if (bb.x1 > bb.x0) recordCrop(L, snap, bb); },
     cancel: function () { restore(L, snap, 0, 0); }
   };
 }

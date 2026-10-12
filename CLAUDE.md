@@ -40,7 +40,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/tools.js` | The quick settings at the top of the dock (`updateQuick()`, `quickTitle()`), fill (`fillAt`), line and shapes (`beginShape`), smudge (`beginSmudge`) |
 | `js/select.js` | Selection (rectangle or freehand) and moving the selected pixels (`S.sel`, `dropSelection()`, `deleteSelection()`) |
 | `js/pixel.js` | Pixel art: `isPixel()`, the pixel pencil and eraser (`beginPixelStroke`), pixel line and shapes (`drawPixelShape`), the pixel/tile grid (`drawGrid`), hard-edged selection masks (`hardMask`) |
-| `js/pad.js` | The test pad in the Edit tab and its pressure readout |
+| `js/pad.js` | The test pad in the Edit tab, its pressure readout and the Pen pressure setting |
 | `js/files.js` | Saving the open image in IndexedDB (`saveDoc`, `idbGet/Put/Del`), `downloadBlob()`, PNG export (with a scale for pixel art), drawing files (`.sketchroom.json`), "Clear drawing" (`newDoc`) |
 | `js/document.js` | The open image (`S.doc`): `setDocSize()`, `applyDocMode()`, `useLayers()`, opening the quick sketch or a library image (`openSketch`, `openImage`), cloud saving (`cloudSave`, `leaveDoc`), thumbnails |
 | `js/library.js` | The homepage: cards, breadcrumbs, Create new (Image / Folder / Project / Import a file), Open / Rename / Move to… / Duplicate / Delete, the quick sketch banner, and the page addresses (`route()`) |
@@ -122,6 +122,18 @@ It was first built in Claude and published as a private artifact (https://claude
 - A stroke: `Engine` stamps a pre-rendered tip along the path at `spacing`. Brushes draw into the separate `buffer` canvas shown above the active layer at the brush's opacity, then composite onto the layer when the pen lifts. The eraser draws straight onto the layer with `destination-out`. `Engine.stamp()` spreads alpha across overlapping stamps (`this.norm`), so Flow and pen pressure show.
 - Undo: each stroke stores before/after crops of its bounding box, and layer operations store closures. History is capped at 80 entries and resets when another image opens.
 - Touch: once a pen has been seen, one finger pans and two fingers pinch-zoom. Before that, a finger draws.
+- **Pen pressure** (`canvas.js`): each pen stroke (brush, eraser, smudge and the test pad) uses `newPressure()` / `samplePressure()` / `finishPressure()`. Each sample records three sources:
+  - `'pointer'`: the pointer event's pressure.
+  - `'force'`: Safari's stylus `Touch.force`, from touch events tracked by `trackStylus`.
+  - `'speed'`: made-up pressure from screen speed, eased. Slow is heavy and fast is light, and strokes start light.
+  - **Choosing a source:** after each pen stroke the working source is stored in `S.pen.src`:
+    - pointer if it changed at all (a real sensor never sends the exact same value for a whole stroke)
+    - otherwise force if that changed
+    - otherwise speed
+  - **Edit tab "Pen pressure":** sets `S.pen.mode`: Automatic (`auto`, uses `src`), From the pen (`pen`), From drawing speed (`speed`) or Off (`off`).
+  - **Saved:** both are saved per browser in localStorage `sketchroom.pen`.
+  - **Fingers and mouse:** always draw at full pressure.
+  - **Why:** a stuck low value made every pressure brush thin and faint.
 - Shortcuts: B brush, E eraser, S smudge, G fill, L line, U shapes, M select, T text, I eyedropper, H or hold Space to pan, [ and ] change size, Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z redo. Esc closes the color pop-up. Esc or Enter drops a selection, and Delete clears the selected pixels.
 - **Tools and the quick panel:** the top of the dock shows the current tool's settings. `#qPaint` holds Size and Opacity, relabeled "Strength" for smudge. `#qFill`, `#qShape` and `#qSelect` belong to their tools.
   - **Lock:** `L.locked` stops every tool, Clear and Merge, all through `canDraw(L)`.
@@ -199,7 +211,7 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 
 ## Known issues
 
-- Apple Pencil pressure did not visibly change brush size or opacity on the owner's iPad in Safari. The cause was not found. The Edit tab's test pad prints the pressure range of each stroke. A flat range means the browser isn't passing pressure through. A varying range means the bug is in `engine.js`.
+- **Pen pressure on the owner's iPad** (2026-10-12): the test pad showed a flat 0.12 for every point. The owner doesn't know which stylus they have, so it may have no pressure sensor (Apple Pencil USB-C, Logitech Crayon), or Safari may send stale values. Automatic mode now handles both cases (see "Pen pressure"). It's not yet confirmed on the iPad which source it settled on: the test pad's readout says.
 - Not tested on Android or on non-Apple styluses.
 - Large canvases with many layers use a lot of memory (each layer is w × h × 4 bytes, plus a full copy during each stroke for undo). The New image dialog warns above 9 megapixels.
 - Opening a library image always downloads every layer (no local cache once synced).

@@ -167,7 +167,7 @@ textarea { resize: vertical; min-height: 64px; }
 .homebody { overflow-y: auto; padding: 20px 16px 48px; }
 /* The art behind the signed-in pages (js/background.js), faded by a layer of the page color. The header and content are
    positioned so they paint above it; the header sits higher so its account menu can hang over the content. */
-.libbg, .libshade { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.libbg, .libshade { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
 .libbg { display: block; }
 .libshade { background: var(--bg); }
 .home > .top { position: relative; z-index: 2; }
@@ -187,6 +187,7 @@ textarea { resize: vertical; min-height: 64px; }
 .sheet { position: relative; aspect-ratio: 1000 / 720; background-color: #fbfcfb; background-image: radial-gradient(circle, #d3dad8 1px, transparent 1.2px); background-size: 24px 24px; border-radius: 3px; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), 0 22px 44px var(--shadow); transform: rotate(-1.2deg); animation: settle 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes settle { from { transform: rotate(2.2deg) translateY(14px); opacity: 0; } to { transform: rotate(-1.2deg); opacity: 1; } }
 .sheet canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+@supports not (aspect-ratio: 1) { .sheet { height: 0; padding-top: 72%; } }
 .sheethint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--font-display); font-size: clamp(22px, 3vw, 32px); font-weight: 600; color: #a9b4b1; pointer-events: none; transition: opacity 0.25s; }
 .sheethint.gone { opacity: 0; }
 .tray { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 22px; }
@@ -217,10 +218,13 @@ textarea { resize: vertical; min-height: 64px; }
 .hgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
 .hcard { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; min-width: 0; }
 .hcard:hover { border-color: var(--mute); }
-.hthumb { aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--panel2); color: var(--accent); overflow: hidden; }
+/* A 4:3 box from padding (not aspect-ratio), with its contents absolutely positioned, so a thumbnail can never stretch
+   the card. iPad Safari stretched image cards down the screen with the aspect-ratio version (2026-10-12). */
+.hthumb { position: relative; flex: none; height: 0; padding-top: 75%; background: var(--panel2); color: var(--accent); overflow: hidden; }
+.hthumb > * { position: absolute; top: 0; right: 0; bottom: 0; left: 0; margin: auto; }
 .hcard.image .hthumb { background: #ffffff; }
-.hthumb img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-.hthumb img.pixelated { image-rendering: pixelated; width: 100%; height: 100%; }
+.hthumb img, .hthumb canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+.hthumb img.pixelated { image-rendering: pixelated; }
 .checker, .hcard.image .hthumb.checker { background-color: #ffffff; background-image: linear-gradient(45deg, #e4e4e4 25%, transparent 25%, transparent 75%, #e4e4e4 75%), linear-gradient(45deg, #e4e4e4 25%, transparent 25%, transparent 75%, #e4e4e4 75%); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
 .hmeta { padding: 8px 42px 10px 12px; display: flex; flex-direction: column; min-width: 0; }
 .hname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
