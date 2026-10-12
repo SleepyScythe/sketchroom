@@ -126,6 +126,14 @@ It was first built in Claude and published as a private artifact (https://claude
     - **Sending:** it sends only the changed pixels, as `shares/{sid}/ops` docs: `px` ops (tiles up to 256 × 256, a patch PNG plus a mask PNG unless the whole tile changed) and `layers` ops (the full layer list plus deleted ids).
     - **Receiving:** incoming ops are applied in server order to the layer and its shadow, so they're never echoed back.
     - **Same person on two devices:** ops are skipped by tab (`LIVE_CID`), so two of your own devices also stay in sync.
+  - **Strokes as they're drawn** (the owner asked for this after testing with a friend):
+    - **Sending:** a brush stroke is also streamed as `stroke` ops about every 100 ms (`liveStrokeBegin` / `liveStrokePoint` / `liveStrokeSend` from `beginStroke`, `addPoints`, `endStroke` and `abortStroke`). Each carries its points as flat `[x, y, pressure, …]`, and the first one also carries the brush (`params`) and color.
+    - **Receiving:** the others draw it with their own `Engine` into a preview canvas right above that layer (`liveStrokeOp`, kept in place by `livePlacePreviews` from `renderStack`).
+    - **Swapping in the real stroke:** the preview is dropped 150 ms after that tab's px ops arrive (or 5 s after `done`, or at once on `cancel`).
+    - **Skipped:** previews are not replayed when an image opens.
+    - **Not streamed:** the eraser, smudge, pixel art and the other tools still appear when finished.
+    - **Tested 2026-10-12 through Firestore:** the friend's tab showed the stroke about 0.3 s after it started and grew every 0.1 s. The finished pixels replaced it about 0.6 s after the pen lifted, covering nearly the same pixels.
+    - **Cost:** about 10 Firestore writes a second per person while their pen is down, plus a read per write for each other person in the image.
   - **Hooks:** `liveTouch` is called from `recordCrop`, `restore`, `restoreChanged`, `clearLayer` and `mergeDown`. `liveSoon` is called from `renderLayers` and `scheduleSave`. A layer with no shadow (new, duplicated, imported) is sent whole.
   - **Opening and saving:**
     - **Opening:** `openImage` loads the saved copy, then `liveStart` replays the ops from a minute before the item's `updated`. Drawing stays blocked until that's done.
@@ -204,7 +212,7 @@ It was first built in Claude and published as a private artifact (https://claude
   - `users/{uid}/friends/{friendUid}`: `{ since }`, readable only by `uid`. Written on both sides when a request is accepted.
   - `friendRequests/{from}_{to}`: `{ from, to, at }`, readable and deletable by those two people. Can only be sent to someone with a profile who isn't already a friend.
   - `shares/{owner}_{imageId}`: `{ owner, image, members (up to 5 of the owner's friends), name, at }`, written only by the owner. Members can read and update that image's item (limited fields) and read and write its layer files.
-  - `shares/{sid}/ops/{opId}`: live changes `{ by, at (server time), seq, cid, kind: 'px' | 'layers', … }`. The owner and members read and create them. The author or the owner deletes them.
+  - `shares/{sid}/ops/{opId}`: live changes `{ by, at (server time), seq, cid, kind: 'px' | 'layers' | 'stroke', … }`. The owner and members read and create them. The author or the owner deletes them.
   - `requests/{uid}_{brushId}`: a tester's suggestion for the free library. Admins Add or Decline it in the Brushes tab.
   - `profiles/{uid}`: the public profile `{ username, displayName, bio, pronouns, location, links, avatar, color, joined, updated }`. Any signed-in person can read it, and only its owner can write it.
   - `usernames/{name}`: `{ uid }` reserves a username. It is create-only. `store.saveProfile` writes the profile and the new name, and deletes the old name, in one batch, and the rules check both sides with `getAfter`, so names are unique.

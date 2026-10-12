@@ -132,6 +132,11 @@ async function livePx(lv, op) {
     else g.clearRect(op.x, op.y, op.w, op.h);
     g.drawImage(patch, op.x, op.y); g.restore();
   });
+  // The finished stroke is here, so its preview can go once the rest of its tiles have landed.
+  for (var k in lv.previews) {
+    var pv = lv.previews[k];
+    if (pv.done && pv.cid === op.cid) { clearTimeout(pv.timer); pv.timer = setTimeout(liveDropPreview.bind(null, lv, k), 150); }
+  }
 }
 function liveLayers(lv, op) {
   (Array.isArray(op.deleted) ? op.deleted : []).forEach(function (id) {
@@ -162,7 +167,8 @@ async function liveApply(lv, op) {
     lv.seen[op.by] = 1; loadPeople([op.by]);
     toast((S.people[op.by] ? '@' + S.people[op.by].username : 'A friend') + ' is drawing with you.');
   }
-  if (op.kind === 'px') await livePx(lv, op);
+  if (op.kind === 'stroke') liveStrokeOp(lv, op);
+  else if (op.kind === 'px') await livePx(lv, op);
   else if (op.kind === 'layers') {
     liveLayers(lv, op);
     for (var id in lv.pending) {
@@ -173,11 +179,68 @@ async function liveApply(lv, op) {
   }
 }
 
+/* ---------- strokes while they're being drawn ----------
+   The owner wanted strokes to show on both screens as they're drawn, not only once the pen lifts (2026-10-12). So a brush
+   stroke is also streamed as 'stroke' ops about every 100 ms: its points (x, y, pressure), and in the first one the brush
+   and color. The others draw it with the same brush into a preview canvas above that layer, and the finished pixels
+   (the px ops sent when the pen lifts) replace the preview. Previews aren't replayed when an image opens. The eraser,
+   smudge, pixel art and the other tools still show up once they're finished. */
+var LIVE_STROKE_MS = 100;
+function liveStrokeBegin(c) { if (S.live && S.live.ready) c.live = { sk: uid(), pts: [], first: true, timer: 0 }; }
+function liveStrokePoint(c, x, y, p) {
+  var s = c.live; if (!s) return;
+  s.pts.push(Math.round(x * 10) / 10, Math.round(y * 10) / 10, Math.round(p * 100) / 100);
+  if (!s.timer) s.timer = setTimeout(function () { liveStrokeSend(c, false, false); }, LIVE_STROKE_MS);
+}
+// done: the pen lifted. cancel: the stroke was thrown away (a pinch started, or undo during it).
+function liveStrokeSend(c, done, cancel) {
+  var s = c.live, lv = S.live; if (!s) return;
+  clearTimeout(s.timer); s.timer = 0;
+  if (done) c.live = null;
+  if (!lv || !lv.ready || (s.first && (cancel || !s.pts.length)) || (!s.pts.length && !done)) return;
+  var op = { kind: 'stroke', sk: s.sk, layer: c.L.id, pts: s.pts, cid: LIVE_CID, seq: ++lv.seq };
+  if (s.first) { op.first = true; op.params = JSON.parse(JSON.stringify(c.b)); op.color = c.color; s.first = false; }
+  if (done) op.done = true;
+  if (cancel) op.cancel = true;
+  s.pts = [];
+  lv.outbox.push(op); liveSendOutbox(lv);
+}
+function liveStrokeOp(lv, op) {
+  var key = op.cid + ':' + op.sk, pv = lv.previews[key];
+  if (op.first && !pv) {
+    var L = layerById(op.layer);
+    if (!L || !op.params || typeof op.params !== 'object') return;
+    var b = P(op.params), color = /^#[0-9a-f]{6}$/i.test(String(op.color)) ? op.color : '#000000', cv = liveCanvas(DOC_W, DOC_H);
+    pv = lv.previews[key] = { canvas: cv, L: L, b: b, cid: op.cid, eng: new Engine(cv.getContext('2d'), b, color, 1, 1), last: null, done: false, timer: 0 };
+    livePlacePreview(pv);
+  }
+  if (!pv) return;
+  var a = Array.isArray(op.pts) ? op.pts : [];
+  for (var i = 0; i + 2 < a.length; i += 3) {
+    var x = Number(a[i]), y = Number(a[i + 1]), p = clamp(Number(a[i + 2]) || 0, 0, 1);
+    if (isFinite(x) && isFinite(y)) { pv.last = { x: x, y: y, p: p }; pv.eng.add(x, y, p); }
+  }
+  if (op.cancel) { liveDropPreview(lv, key); return; }
+  if (op.done) {
+    if (pv.last) pv.eng.finish(pv.last);
+    pv.done = true; clearTimeout(pv.timer);
+    pv.timer = setTimeout(function () { liveDropPreview(lv, key); }, 5000); // in case the finished pixels never come
+  }
+}
+// A preview sits right above its layer, at the brush's opacity, like the stroke buffer does on the drawer's screen.
+function livePlacePreview(pv) {
+  var L = pv.L, c = pv.canvas;
+  c.style.opacity = String(pv.b.opacity / 100 * L.opacity); c.style.mixBlendMode = L.blend; c.style.display = L.visible ? '' : 'none';
+  if (L.canvas.parentNode === stage) stage.insertBefore(c, L.canvas.nextSibling); else c.remove();
+}
+function livePlacePreviews() { var lv = S.live; if (!lv || !lv.previews) return; for (var k in lv.previews) livePlacePreview(lv.previews[k]); }
+function liveDropPreview(lv, key) { var pv = lv.previews[key]; if (!pv) return; clearTimeout(pv.timer); pv.canvas.remove(); delete lv.previews[key]; }
+
 /* ---------- starting and stopping ---------- */
 // Joins the share's live ops, catching up on everything since fromMs first. Resolves once caught up (or after 8 s).
 function liveStart(sid, fromMs) {
   liveStop(true);
-  var lv = S.live = { sid: sid, doc: S.doc, shadows: {}, touched: {}, deleted: {}, pending: {}, seen: {}, outbox: [],
+  var lv = S.live = { sid: sid, doc: S.doc, shadows: {}, touched: {}, deleted: {}, pending: {}, seen: {}, outbox: [], previews: {},
     known: S.layers.map(function (L) { return L.id; }), sig: liveSig(), queue: Promise.resolve(), seq: Date.now() * 1000,
     ready: false, timer: 0, retry: 0, busy: false, again: false, sending: false, offline: false, unsub: null };
   S.layers.forEach(function (L) { lv.shadows[L.id] = liveShadow(L); });
@@ -191,6 +254,7 @@ function liveStart(sid, fromMs) {
       ops.sort(function (a, b) { return a.atMs - b.atMs || (a.seq || 0) - (b.seq || 0); });
       ops.forEach(function (op) {
         if (!first && op.cid === LIVE_CID) return; // ours, already on the canvas
+        if (first && op.kind === 'stroke') return; // old previews; their finished pixels are in the px ops
         lv.queue = lv.queue.then(function () { return liveApply(lv, op); }).catch(function () { /* skip a broken op */ });
       });
       if (first) lv.queue.then(done);
@@ -203,6 +267,7 @@ async function liveStop(skipFlush) {
   if (!skipFlush && lv.ready) { await liveFlush(); await liveSendOutbox(lv); }
   if (lv.unsub) lv.unsub();
   clearTimeout(lv.timer); clearTimeout(lv.retry);
+  Object.keys(lv.previews).forEach(function (k) { liveDropPreview(lv, k); });
   if (S.live === lv) S.live = null;
   renderLiveBadge();
 }

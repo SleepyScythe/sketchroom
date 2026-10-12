@@ -198,7 +198,8 @@ function beginStroke(e) {
     buffer.style.opacity = (b.opacity / 100) * L.opacity; buffer.style.mixBlendMode = L.blend;
     stage.insertBefore(buffer, L.canvas.nextSibling); target = bctx;
   }
-  cur = { id: e.pointerId, L: L, snap: snap, eng: new Engine(target, b, color, 1, isEr ? b.opacity / 100 : 1), isEr: isEr, b: b, raw: null, pr: newPressure(e.pointerType) };
+  cur = { id: e.pointerId, L: L, snap: snap, eng: new Engine(target, b, color, 1, isEr ? b.opacity / 100 : 1), isEr: isEr, b: b, color: color, raw: null, pr: newPressure(e.pointerType) };
+  if (!isEr) liveStrokeBegin(cur); // drawing together: stream the stroke as it is drawn
   addPoints(e);
 }
 function addPoints(e) {
@@ -207,13 +208,14 @@ function addPoints(e) {
   for (var i = 0; i < list.length; i++) {
     var ev = list[i], pos = docPos(ev), pr = samplePressure(cur.pr, ev, e);
     cur.raw = { x: pos.x, y: pos.y, p: pr };
-    cur.eng.add(cur.raw.x, cur.raw.y, cur.raw.p);
+    cur.eng.add(cur.raw.x, cur.raw.y, cur.raw.p); liveStrokePoint(cur, cur.raw.x, cur.raw.y, cur.raw.p);
   }
 }
 function endStroke() {
   if (!cur) return;
   var c = cur; cur = null;
   c.eng.finish(c.raw);
+  liveStrokeSend(c, true, false);
   finishPressure(c.pr);
   if (!c.isEr) showPressure(c.pr);
   if (c.isEr) { c.L.ctx.globalCompositeOperation = 'source-over'; c.L.ctx.globalAlpha = 1; }
@@ -224,7 +226,7 @@ function endStroke() {
 function abortStroke() {
   if (drag) { var d = drag; drag = null; if (d.cancel) d.cancel(); }
   if (!cur) return;
-  var c = cur; cur = null;
+  var c = cur; cur = null; liveStrokeSend(c, true, true);
   c.L.ctx.globalCompositeOperation = 'source-over'; c.L.ctx.globalAlpha = 1;
   if (c.isEr) { c.L.ctx.clearRect(0, 0, DOC_W, DOC_H); c.L.ctx.drawImage(c.snap, 0, 0); }
   buffer.remove();

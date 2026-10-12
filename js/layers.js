@@ -23,6 +23,7 @@ function renderStack() {
     L.canvas.style.display = L.visible ? '' : 'none';
   });
   stage.appendChild(overlay);
+  livePlacePreviews(); // drawing together: keep friends' strokes-in-progress above their layers
 }
 function insertLayer(L, idx) { S.layers.splice(idx, 0, L); S.active = L; renderStack(); renderLayers(); }
 function removeLayer(L) {

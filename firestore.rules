@@ -94,12 +94,13 @@ service cloud.firestore {
         && friendsOk(request.resource.data.members)
         && exists(/databases/$(database)/documents/users/$(request.auth.uid)/items/$(request.resource.data.image));
       allow delete: if signedIn() && resource.data.owner == request.auth.uid;
-      // The live changes (see js/live.js). Written by the people in the share, stamped with the server time.
+      // The live changes (see js/live.js): finished pixels (px), the layer list (layers) and strokes being drawn (stroke).
+      // Written by the people in the share, stamped with the server time.
       match /ops/{opId} {
         allow read: if isShareMember(sid);
         allow create: if isShareMember(sid) && request.resource.data.by == request.auth.uid && request.resource.data.at == request.time
-          && request.resource.data.keys().hasOnly(['by', 'at', 'seq', 'cid', 'kind', 'layer', 'x', 'y', 'w', 'h', 'patch', 'mask', 'full', 'list', 'deleted'])
-          && request.resource.data.kind in ['px', 'layers'];
+          && request.resource.data.keys().hasOnly(['by', 'at', 'seq', 'cid', 'kind', 'layer', 'x', 'y', 'w', 'h', 'patch', 'mask', 'full', 'list', 'deleted', 'sk', 'pts', 'params', 'color', 'first', 'done', 'cancel'])
+          && request.resource.data.kind in ['px', 'layers', 'stroke'];
         allow delete: if signedIn() && (resource.data.by == request.auth.uid
           || get(/databases/$(database)/documents/shares/$(sid)).data.owner == request.auth.uid);
       }
