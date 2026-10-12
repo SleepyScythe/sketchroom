@@ -53,6 +53,14 @@ service cloud.firestore {
       allow read, delete: if isUser(uid);
       allow create, update: if isUser(uid) && validFont(request.resource.data);
     }
+    // Which "What's new" notes this person has seen, so they only pop up once per account.
+    match /users/{uid}/settings/news {
+      allow read, delete: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['seen', 'at'])
+        && request.resource.data.seen is string && request.resource.data.seen.size() <= 40
+        && request.resource.data.at is number;
+    }
     match /users/{uid}/settings/colors {
       allow read, delete: if isUser(uid);
       allow create, update: if isUser(uid)

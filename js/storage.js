@@ -81,6 +81,8 @@ async function initStore() {
     if (auth.currentUser) await home().collection('settings').doc('colors').set({ colors: list, at: Date.now() });
     else saveLocalColors(list);
   };
+  // Which "What's new" notes this account has seen (news.js).
+  store.setNewsSeen = async function (v) { await home().collection('settings').doc('news').set({ seen: v, at: Date.now() }); };
   // Uploaded font files, base64 in users/{uid}/uploadedFonts (under the 1 MB document limit).
   store.addUploadedFont = async function (family, data) { await home().collection('uploadedFonts').doc(fontDocId(family)).set({ family: family, data: data, at: Date.now() }); };
   store.removeUploadedFont = async function (family) { await home().collection('uploadedFonts').doc(fontDocId(family)).delete(); };
@@ -245,6 +247,11 @@ async function initStore() {
       unsub.push(mine.collection('fonts').orderBy('at', 'asc').limit(200).onSnapshot(function (snap) {
         S.myFonts = fontList(snap); rebuildFonts();
       }, function () { /* fonts fall back to the built-in list */ }));
+      S.newsSeen = null;
+      mine.collection('settings').doc('news').get().then(function (d) {
+        if (S.myId !== user.uid) return;
+        S.newsSeen = d.exists ? String((d.data() || {}).seen || '') : ''; renderHome();
+      }, function () { /* the notes wait until next time */ });
       var colors = mine.collection('settings').doc('colors');
       unsub.push(colors.onSnapshot(function (snap) {
         if (snap.exists) { S.saved = cleanColors((snap.data() || {}).colors); renderSaved(); }

@@ -166,6 +166,7 @@ function renderHome() {
   $('#newProject').disabled = !!at;
   var asks = pendingFriendRequests().length, fb = $('#friendsCount');
   fb.textContent = asks; fb.hidden = !asks;
+  maybeShowNews();
 }
 // list: [{ label, hash }], the last one being the current page.
 function fillCrumbs(nav, list) {

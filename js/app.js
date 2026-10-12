@@ -209,7 +209,7 @@ function wire() {
 /* ---------- start ---------- */
 async function init() {
   var L = makeLayer('Layer ' + (++layerCount)); S.layers.push(L); S.active = L; renderStack();
-  buildSliders(); wire(); initPad(); initColor(); initTools(); initLibrary(); initProfile(); initFriends();
+  buildSliders(); wire(); initPad(); initColor(); initTools(); initLibrary(); initProfile(); initFriends(); initNews();
   setTool('brush');
   // Installable app: the service worker lets the app open offline. It always tries the network first, so updates show up.
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(function () { /* optional */ });
