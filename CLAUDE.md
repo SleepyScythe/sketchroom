@@ -46,6 +46,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/library.js` | The homepage: cards, breadcrumbs, Create new (Image / Folder / Project / Import a file), Open / Rename / Move to… / Duplicate / Delete, the quick sketch banner, and the page addresses (`route()`) |
 | `js/importbrush.js` | `readBrushFile()`: Import brushes reads Sketchroom `.json`, `.brush` / `.brushset` (zip + `Brush.archive` binary plist + `Shape.png`), Photoshop `.abr` (sampled tips, v1/v2/v6, same layout GIMP reads) and PNG/JPG pictures. Includes a small bplist/NSKeyedArchiver reader and lazy-loads fflate for unzipping |
 | `js/profile.js` | Usernames and profiles (`needUsername`, `claimUsername`, the profile page `#/profile`, the Edit profile dialog), the contact form, and the owner's inbox |
+| `js/friends.js` | Friends: requests, the friends page `#/friends`, a friend's view-only library `#/u/<uid>` and the image viewer (`showFriendImage`, which draws the visible layers onto one canvas) |
 | `legal.html` | Terms of use, Privacy policy and Credits (with the Lucide/Feather license texts). Linked from the homepage footer and the profile page |
 | `LICENSE`, `THIRD_PARTY_NOTICES.md` | The owner's code is "all rights reserved". Third-party licenses (icons, fonts, Firebase) |
 | `js/landing.js` | The sample drawing sheet on the signed-out homepage (pencil, marker, ink, spray). Self-contained, nothing saved. Loads before `app.js` |
@@ -61,11 +62,14 @@ It was first built in Claude and published as a private artifact (https://claude
   - `#/` is the library's top level. `#/c/<id>` is inside a project or folder.
   - `#/d/<id>` opens an image in the editor. `#/sketch` opens the quick sketch.
   - Leaving an image always goes through `leaveDoc()`, which saves first.
+  - `#/profile` is your profile, `#/friends` the friends page. `#/u/<uid>` is a friend's library, with `/c/<id>` for inside a project or folder and `/d/<id>` to view an image.
   - The library needs sign-in. Signed out, the homepage offers Sign in and Quick sketch. The quick sketch is one drawing kept only in the browser, under IndexedDB key `current` (the same key the single-drawing app used before the library existed).
 - **Library items** (`users/{uid}/items/{id}`): `{ type: 'project' | 'folder' | 'image', name, parent ('' = top level), created, updated }`.
   - Images add `w`, `h`, `px` (pixel art `{ tile, cols, rows }` or null), `layers` (`[{ id, name, visible, opacity, blend, locked }]`), `active`, `count` and `thumb` (a small data URL for the card).
   - The owner chose flexible nesting: projects hold folders and images, folders hold images, and anything can sit at the top level. Folders can't hold folders, and projects only sit at the top level.
   - Deleting a project or folder deletes everything inside it, Storage files included.
+  - `private` (true or false) hides an item from friends. Make private / Show to friends in the card menu applies to the item and everything inside it (`setPrivate`). New items, copies and moved items take the privacy of the project or folder they land in (`privateAt`). An image can't be shown to friends while its folder or project is private.
+  - Items made before friends existed had no `private` field. Friends' queries ask for `private == false`, which skips them, so `fillPrivacy()` gives each one the flag after every server snapshot of your library. It does not change `updated`.
 - **Each layer's pixels** are a PNG in Cloud Storage at `users/{uid}/images/{imageId}/{layerId}.png`.
 - **Saving an image:**
   - Every change is written to IndexedDB (`img:<id>`) about 2.5 s later.
@@ -98,6 +102,13 @@ It was first built in Claude and published as a private artifact (https://claude
   - Other people only ever see the username, never the Google name or email: the account button, brush suggestions (`byName: '@username'`) and contact messages all use it.
   - Profile fields: display name, pronouns, location, bio, up to 3 links (https only), a 160 px picture stored as a data URL in the profile, and a color.
   - The profile page also shows counts, the account box (the email, visible only to the user) and, for admins, the inbox.
+- **Friends** (`friends.js`, done 2026-10-12):
+  - **Adding:** add a friend by username on the friends page. That writes `friendRequests/{from}_{to}`. If they already sent you one, adding them accepts theirs instead.
+  - **Accepting:** `store.acceptFriendRequest` writes `users/{me}/friends/{them}` and `users/{them}/friends/{me}` (`{ since }`) and deletes the request, all in one batch. The rules only allow each side while the request exists and only if the same batch deletes it.
+  - **Removing:** either friend can remove the friendship, which deletes both sides.
+  - **What friends see:** each other's profile, and every library item with `private == false` (read only), including those images' layer PNGs. The image viewer composites the visible layers with their opacity and blend, on white (pixel art on a checkerboard). Nothing is saved, and friends can't copy or export.
+  - **Notifications:** pending requests put a dot on the account button and a count on the library's Friends button.
+  - **Testing note:** the accept and view paths were tested on 2026-10-12 with a fake second account created in the console (since deleted) and the Rules Playground. They have not yet been tried by two real people.
 - **Contact form:** writes to `messages`. Only admins read them, in the inbox on their profile page. An unread message adds a dot to the account button.
 - Brush settings live in one object (keys in `BASE` and `SCHEMA` in `config.js`). Saved brushes are `{ name, params, at }`, plus `by` (the admin's uid) in the free library, and each carries `where` (`'library'` or `'mine'`) in the app.
 - A stroke: `Engine` stamps a pre-rendered tip along the path at `spacing`. Brushes draw into the separate `buffer` canvas shown above the active layer at the brush's opacity, then composite onto the layer when the pen lifts. The eraser draws straight onto the layer with `destination-out`. `Engine.stamp()` spreads alpha across overlapping stamps (`this.norm`), so Flow and pen pressure show.
@@ -133,7 +144,9 @@ It was first built in Claude and published as a private artifact (https://claude
   - `users/{uid}/brushes`, `users/{uid}/fonts`: My brushes and Your fonts.
   - `users/{uid}/settings/colors`: saved colors.
   - `users/{uid}/uploadedFonts/{id}`: uploaded font files `{ family, data (base64), at }`, 700 KB max.
-  - `users/{uid}/items/{id}`: the library (see "How it works").
+  - `users/{uid}/items/{id}`: the library (see "How it works"). Friends can read items with `private == false`.
+  - `users/{uid}/friends/{friendUid}`: `{ since }`, readable only by `uid`. Written on both sides when a request is accepted.
+  - `friendRequests/{from}_{to}`: `{ from, to, at }`, readable and deletable by those two people. Can only be sent to someone with a profile who isn't already a friend.
   - `requests/{uid}_{brushId}`: a tester's suggestion for the free library. Admins Add or Decline it in the Brushes tab.
   - `profiles/{uid}`: the public profile `{ username, displayName, bio, pronouns, location, links, avatar, color, joined, updated }`. Any signed-in person can read it, and only its owner can write it.
   - `usernames/{name}`: `{ uid }` reserves a username. It is create-only. `store.saveProfile` writes the profile and the new name, and deletes the old name, in one batch, and the rules check both sides with `getAfter`, so names are unique.
@@ -141,6 +154,8 @@ It was first built in Claude and published as a private artifact (https://claude
   - `admins/{uid}`: marks an admin (`S.canEdit`).
 - **Making someone an admin:** they sign in once. In Firebase console > Authentication > Users, copy their User UID. In Firestore > Data, add a document with that UID as its ID to the `admins` collection, with any field (for example `note: "owner"`). Only the console can write `admins`.
 - **Security rules:** `firestore.rules` and `storage.rules`. After editing one, paste it into Firebase console > Firestore Database > Rules (or Storage > Rules) and press Publish.
+  - **Storage reads Firestore:** the Storage rules call `firestore.exists()` / `firestore.get()` to check friendship and the item's `private` flag. That needed a one-time IAM role for the Storage service account. The owner approved it, and it was attached from the console's "Provision cross-service rules" dialog on 2026-10-12. Each friend's layer download costs a couple of Firestore reads.
+  - **Order:** publish rules before pushing code that writes new fields (`validItem` uses `hasOnly`, so the old rules reject unknown fields).
 - **Authorized domains:** sign-in only works on domains listed in Authentication > Settings > Authorized domains (`localhost`, `sketchroom-abab3.firebaseapp.com`, `sketchroom-abab3.web.app`, `sleepyscythe.github.io`).
 - **Fallback:** if `FIREBASE_CONFIG` is `null`, the SDK fails to load, or the page is opened from `file://`, then `store.online` is false. The homepage then offers only the quick sketch, and brushes and fonts use `localStorage`.
 - **Home-screen app (iPad):** Safari's Share menu has Add to Home Screen. On iOS the home-screen app has its own storage, separate from Safari, so the quick sketch, Recent colors and sign-in don't carry over. Library images are in the account, so they do once signed in. Google sign-in from inside the home-screen app has not been tested. Firebase's popup flow can fail in iOS standalone mode. If it does, the fallback is to sign in from Safari, or to set `display` to `browser` in the manifest.
@@ -188,12 +203,8 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 - Pixel art extras: tile preview (see a tile repeated), symmetry or mirror drawing, an indexed palette, exporting each tile as its own PNG.
 - **Next up (owner, 2026-10-11):**
   - **Usernames:** done 2026-10-12, with profiles (see "How it works").
-  - **Friends list:** friends can see each other's library, unless an item is set to private. This needs:
-    - a profile collection with unique usernames
-    - friend requests and acceptance
-    - a per-item `private` flag
-    - Firestore and Storage rules that let accepted friends read non-private items and layer files. Today the rules only allow the owner.
-- **Privacy rule:** never write a user's email into Firestore or anything other users can see. `requests.byName` uses the Google display name or "A tester". `S.myName` may fall back to the email, but only for the user's own screen.
+  - **Friends list:** done 2026-10-12 (see "How it works"). Possible next steps: an activity feed of friends' new images, likes or comments, and copying a friend's image (only with their permission).
+- **Privacy rule:** never write a user's email into Firestore or anything other users can see. `requests.byName` uses `@username` or "A tester". `S.myName` may fall back to the email, but only for the user's own screen.
 
 ## Testing
 
@@ -218,6 +229,13 @@ There is no test suite. Check changes by serving the folder (see "Running locall
 - Import a file (a drawing file and a picture)
 - the quick sketch's "Add it to the library"
 - a pixel art tileset: pencil, eraser, line, shapes, fill, select and move with hard edges, Export PNG 8× bigger
+
+**Friends** (needs two accounts):
+- send a request by username, then cancel it
+- accept and decline from the other account
+- open each other's libraries, folders and images
+- make an item private and confirm it disappears for the friend
+- remove the friend
 
 **Tools:**
 - fill inside an outline

@@ -17,7 +17,7 @@
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,600..800&family=Figtree:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 <div class="home" id="home" hidden>
@@ -71,6 +71,8 @@
     <section class="library" id="homeLibrary" hidden>
       <div class="homebar">
         <nav class="crumbs" id="crumbs" aria-label="Where you are"></nav>
+        <div class="homebtns">
+        <button class="btn" id="friendsBtn">Friends<span class="badge" id="friendsCount" hidden></span></button>
         <div class="menu-wrap">
           <button class="btn primary" id="createBtn" aria-haspopup="true" aria-expanded="false">Create new</button>
           <div class="menu" id="createMenu" hidden>
@@ -80,6 +82,7 @@
             <button id="newImport">Import a file</button>
           </div>
           <input type="file" id="importInput" accept=".json,application/json,image/*" hidden>
+        </div>
         </div>
       </div>
       <div class="sketchbanner" id="sketchBanner" hidden>
@@ -121,6 +124,50 @@
         <div class="inbox" id="pInbox"></div>
       </div>
     </section>
+    <section class="profilepage" id="homeFriends" hidden>
+      <div class="ptop">
+        <button class="btn backbtn" id="fBack"><span data-icon="back"></span>Back to library</button>
+        <span class="ptitle">Friends</span>
+      </div>
+      <div class="pbox">
+        <h3>Add a friend</h3>
+        <form class="addfriend" id="formAddFriend">
+          <input type="text" id="addFriendInput" maxlength="21" placeholder="Their @username" aria-label="Their username" autocomplete="off" autocapitalize="none" spellcheck="false">
+          <button class="btn primary" id="addFriendBtn">Send request</button>
+        </form>
+        <p class="formerror" id="addFriendMsg" role="alert"></p>
+        <p class="hint">Friends can see your profile and everything in your library except what you make private. To hide something, choose Make private in its ••• menu.</p>
+      </div>
+      <div class="pbox" id="fInBox" hidden>
+        <h3 id="fInTitle">Friend requests</h3>
+        <div class="people" id="fIn"></div>
+      </div>
+      <div class="pbox">
+        <h3 id="fListTitle">Your friends</h3>
+        <div class="people" id="fList"></div>
+        <p class="hint" id="fEmpty">No friends yet. Add someone by their username above.</p>
+      </div>
+      <div class="pbox" id="fOutBox" hidden>
+        <h3>Sent requests</h3>
+        <div class="people" id="fOut"></div>
+      </div>
+    </section>
+    <section class="library" id="homeFriend" hidden>
+      <div class="ptop">
+        <button class="btn backbtn" id="ufBack"><span data-icon="back"></span>Friends</button>
+      </div>
+      <div id="ufHead"></div>
+      <nav class="crumbs" id="ufCrumbs" aria-label="Where you are"></nav>
+      <div class="hgrid" id="ufGrid"></div>
+      <p class="homeempty" id="ufEmpty" hidden></p>
+      <div class="viewer" id="ufViewer" hidden>
+        <div class="viewbar">
+          <div class="viewtitle"><strong id="ufViewName"></strong><span class="hint" id="ufViewInfo"></span></div>
+          <button type="button" class="btn sm" id="ufZoom">Zoom in</button>
+        </div>
+        <div class="viewbox" id="ufViewBox"><canvas id="ufCanvas" width="16" height="16" role="img" aria-label="Your friend's image"></canvas></div>
+      </div>
+    </section>
     <p class="homeempty" id="homeLoading" hidden>Loading your library…</p>
     <footer class="homefoot">
       <a href="legal.html#terms">Terms</a><a href="legal.html#privacy">Privacy</a><a href="legal.html#credits">Credits</a><a href="#/profile" data-contact="other">Contact</a>
@@ -131,6 +178,7 @@
     <button id="cmRename">Rename</button>
     <button id="cmMove">Move to…</button>
     <button id="cmDuplicate">Duplicate</button>
+    <button id="cmPrivate">Make private</button>
     <button id="cmDelete">Delete</button>
   </div>
 </div>
@@ -279,6 +327,7 @@
         <div class="menu" id="accountMenu" hidden>
           <span class="menu-note" id="accountName"></span>
           <button id="myProfile">My profile</button>
+          <button id="myFriends">Friends</button>
           <button id="signOut">Sign out</button>
         </div>
       </div>
@@ -474,26 +523,27 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=11"></script>
-<script src="js/core.js?v=11"></script>
-<script src="js/config.js?v=11"></script>
-<script src="js/engine.js?v=11"></script>
-<script src="js/layers.js?v=11"></script>
-<script src="js/brushes.js?v=11"></script>
-<script src="js/importbrush.js?v=11"></script>
-<script src="js/storage.js?v=11"></script>
-<script src="js/text.js?v=11"></script>
-<script src="js/canvas.js?v=11"></script>
-<script src="js/color.js?v=11"></script>
-<script src="js/tools.js?v=11"></script>
-<script src="js/select.js?v=11"></script>
-<script src="js/pixel.js?v=11"></script>
-<script src="js/pad.js?v=11"></script>
-<script src="js/files.js?v=11"></script>
-<script src="js/document.js?v=11"></script>
-<script src="js/library.js?v=11"></script>
-<script src="js/profile.js?v=11"></script>
-<script src="js/landing.js?v=11"></script>
-<script src="js/app.js?v=11"></script>
+<script src="js/firebase-config.js?v=12"></script>
+<script src="js/core.js?v=12"></script>
+<script src="js/config.js?v=12"></script>
+<script src="js/engine.js?v=12"></script>
+<script src="js/layers.js?v=12"></script>
+<script src="js/brushes.js?v=12"></script>
+<script src="js/importbrush.js?v=12"></script>
+<script src="js/storage.js?v=12"></script>
+<script src="js/text.js?v=12"></script>
+<script src="js/canvas.js?v=12"></script>
+<script src="js/color.js?v=12"></script>
+<script src="js/tools.js?v=12"></script>
+<script src="js/select.js?v=12"></script>
+<script src="js/pixel.js?v=12"></script>
+<script src="js/pad.js?v=12"></script>
+<script src="js/files.js?v=12"></script>
+<script src="js/document.js?v=12"></script>
+<script src="js/library.js?v=12"></script>
+<script src="js/profile.js?v=12"></script>
+<script src="js/friends.js?v=12"></script>
+<script src="js/landing.js?v=12"></script>
+<script src="js/app.js?v=12"></script>
 </body>
 </html>

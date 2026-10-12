@@ -1,11 +1,16 @@
 rules_version = '2';
 
 // Sketchroom Cloud Storage rules. Paste into Firebase console > Storage > Rules, then Publish.
-// Each library image's layers are PNGs at users/{uid}/images/{imageId}/{layerId}.png, readable and writable only by that user.
+// Each library image's layers are PNGs at users/{uid}/images/{imageId}/{layerId}.png. Only that user can write them.
+// They can be read by that user, and by their friends when the image's library item is not private. That check reads
+// Firestore (users/{uid}/friends and users/{uid}/items), which needs the one-time permission the console asks for.
 service firebase.storage {
   match /b/{bucket}/o {
     match /users/{uid}/images/{imageId}/{file} {
-      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null && (request.auth.uid == uid
+        || (firestore.exists(/databases/(default)/documents/users/$(uid)/friends/$(request.auth.uid))
+            && firestore.get(/databases/(default)/documents/users/$(uid)/items/$(imageId)).data.private == false));
+      allow delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.size < 60 * 1024 * 1024
         && request.resource.contentType == 'image/png';

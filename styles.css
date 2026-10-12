@@ -268,6 +268,31 @@ textarea { resize: vertical; min-height: 64px; }
 .inbox { display: flex; flex-direction: column; gap: 10px; }
 .msg { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel2); display: flex; flex-direction: column; gap: 6px; }
 .msg.unread { border-color: var(--accent); }
+
+/* ---------- friends ---------- */
+.homebtns { display: flex; align-items: center; gap: 8px; }
+.badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--accent); color: var(--accent-fg); font-size: 11px; font-weight: 700; line-height: 1; }
+.hlock { position: absolute; top: 8px; left: 8px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: rgba(20, 24, 28, 0.72); color: #fff; pointer-events: none; }
+.addfriend { display: flex; flex-wrap: wrap; gap: 8px; }
+.addfriend input { flex: 1; min-width: 160px; font: inherit; font-size: 14px; color: var(--fg); background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
+.people { display: flex; flex-direction: column; gap: 8px; }
+.people:empty { display: none; }
+.person { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }
+.person .avatar { border-color: var(--panel2); }
+.person .who { flex: 1; min-width: 120px; display: flex; flex-direction: column; color: var(--fg); text-decoration: none; }
+.person a.who:hover strong { text-decoration: underline; }
+.person .who strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person .who span { color: var(--mute); font-size: 12px; }
+.person .who span:empty { display: none; }
+#ufHead:empty { display: none; }
+.viewer { display: flex; flex-direction: column; gap: 10px; }
+.viewbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.viewtitle { display: flex; flex-direction: column; min-width: 0; }
+.viewtitle strong { font-family: var(--font-display); font-size: 18px; overflow-wrap: anywhere; }
+/* margin: auto centers the image but still lets it scroll when zoomed in */
+.viewbox { display: flex; overflow: auto; max-height: 78vh; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+.viewbox canvas { margin: auto; flex: none; display: block; cursor: zoom-in; box-shadow: 0 4px 18px var(--shadow); }
+.viewbox canvas.pixelated { image-rendering: pixelated; }
 .msghead { font-size: 12px; color: var(--mute); }
 .msgbody { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .dlg { max-height: calc(100vh - 32px); overflow-y: auto; }

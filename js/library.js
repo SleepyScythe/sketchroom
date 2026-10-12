@@ -7,10 +7,14 @@
    users/{uid}/items/{id}: { type: 'project' | 'folder' | 'image', name, parent ('' = top level), created, updated }
    Images also have w, h, px (pixel art settings or null), layers [{ id, name, visible, opacity, blend, locked }],
    active, count and thumb (a small data URL for the card). Projects hold folders and images, folders hold images,
-   and anything can sit at the top level. */
-function childrenOf(id) { return Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return (it.parent || '') === id; }); }
+   and anything can sit at the top level.
+   private: true hides an item from friends. Everything inside a private project or folder is private too. */
+// items: a friend's library when given, otherwise your own.
+function childrenOf(id, items) { var all = items || S.items; return Object.keys(all).map(function (k) { return all[k]; }).filter(function (it) { return (it.parent || '') === id; }); }
 function descendants(id) { var out = []; childrenOf(id).forEach(function (c) { out.push(c); out = out.concat(descendants(c.id)); }); return out; }
-function pathTo(id) { var out = [], it = S.items[id], guard = 0; while (it && guard++ < 10) { out.unshift(it); it = it.parent ? S.items[it.parent] : null; } return out; }
+function pathTo(id, items) { var all = items || S.items, out = [], it = all[id], guard = 0; while (it && guard++ < 10) { out.unshift(it); it = it.parent ? all[it.parent] : null; } return out; }
+// Whether something placed in container id is private: the container or one of its parents is.
+function privateAt(id) { return pathTo(id).some(function (x) { return x.private === true; }); }
 var TYPE_ORDER = { project: 0, folder: 1, image: 2 };
 function sortItems(list) {
   return list.sort(function (a, b) {
@@ -23,21 +27,49 @@ function byName(a, b) { return String(a.name).localeCompare(String(b.name)); }
 function clampInt(v, lo, hi) { var n = Math.round(Number(v)); return clamp(isFinite(n) ? n : lo, lo, hi); }
 async function createItemHere(type, name, extra) {
   var now = Date.now();
-  return store.createItem(Object.assign({ type: type, name: name, parent: S.homeAt || '', created: now, updated: now }, extra || {}));
+  return store.createItem(Object.assign({ type: type, name: name, parent: S.homeAt || '', created: now, updated: now, private: privateAt(S.homeAt || '') }, extra || {}));
 }
 function createImageItem(name, w, h, px) {
   return createItemHere('image', name, { w: w, h: h, px: px || null, layers: [], active: '', count: 0, thumb: '' });
 }
 
+/* ---------- privacy ---------- */
+// Friends only see items whose private flag is false, so items made before friends existed get the flag
+// (inherited from a private project or folder). Runs after each server snapshot of the library; usually there's nothing to do.
+var privacyFilling = {};
+function fillPrivacy() {
+  var todo = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return typeof it.private !== 'boolean' && !privacyFilling[it.id]; });
+  if (!todo.length) return;
+  todo.forEach(function (it) { privacyFilling[it.id] = true; });
+  store.updateItems(todo.map(function (it) { return { id: it.id, patch: { private: privateAt(it.parent || '') } }; }))
+    .catch(function () { todo.forEach(function (it) { delete privacyFilling[it.id]; }); });
+}
+async function setPrivate(it, on) {
+  if (!on && privateAt(it.parent || '')) {
+    var box = pathTo(it.parent).filter(function (x) { return x.private === true; })[0];
+    toast('It is inside ' + (box ? box.name : 'a private folder') + ', which is private. Show that to friends first.'); return;
+  }
+  var all = [it].concat(descendants(it.id)), many = all.length > 1;
+  try {
+    await store.updateItems(all.map(function (x) { return { id: x.id, patch: { private: on } }; }));
+    toast(on ? it.name + (many ? ' and everything in it are' : ' is') + ' now private. Only you can see ' + (many ? 'them.' : 'it.')
+      : 'Your friends can now see ' + it.name + (many ? ' and everything in it.' : '.'));
+  } catch (e) { toast('Could not change that. Try again.'); }
+}
+
 /* ---------- page addresses ----------
    #/          the library's top level        #/c/<id>    inside a project or folder
-   #/d/<id>    an image open in the editor    #/sketch    the quick sketch (kept in this browser) */
+   #/d/<id>    an image open in the editor    #/sketch    the quick sketch (kept in this browser)
+   #/profile   your profile                   #/friends   friends and friend requests
+   #/u/<uid>   a friend's library (view only), with /c/<id> for inside a project or folder and /d/<id> to view an image */
 var routeToken = 0;
 function parseRoute(h) {
   var m;
   if ((m = /^#\/d\/([A-Za-z0-9]+)$/.exec(h))) return { kind: 'image', id: m[1] };
   if (h === '#/sketch') return { kind: 'sketch' };
   if (h === '#/profile') return { kind: 'profile' };
+  if (h === '#/friends') return { kind: 'friends' };
+  if ((m = /^#\/u\/([A-Za-z0-9]+)(?:\/([cd])\/([A-Za-z0-9]+))?$/.exec(h))) return { kind: 'friend', uid: m[1], sub: m[2] || '', id: m[3] || '' };
   if ((m = /^#\/c\/([A-Za-z0-9]+)$/.exec(h))) return { kind: 'home', id: m[1] };
   return { kind: 'home', id: '' };
 }
@@ -66,9 +98,10 @@ async function route() {
     showView('editor'); if (!same) await openImage(r.id, t);
     return;
   }
-  S.homeView = r.kind === 'profile' ? 'profile' : 'library';
-  if (r.kind !== 'profile') S.lastLibrary = r.id ? '#/c/' + r.id : '#/'; // where the profile's Back button returns to
-  S.homeAt = r.kind === 'profile' ? '' : r.id; showView('home'); renderHome(); checkSketch();
+  S.homeView = r.kind === 'home' ? 'library' : r.kind;
+  if (r.kind === 'home') S.lastLibrary = r.id ? '#/c/' + r.id : '#/'; // where the Back buttons on other pages return to
+  if (r.kind === 'friend') S.friendAt = r; else { S.friendAt = null; closeFriend(); }
+  S.homeAt = r.kind === 'home' ? r.id : ''; showView('home'); renderHome(); checkSketch();
 }
 // Signing in or out: an open library image can't stay open signed out.
 function accountChanged() {
@@ -79,10 +112,14 @@ function accountChanged() {
 /* ---------- the homepage ---------- */
 function renderHome() {
   if ($('#home').hidden) return;
-  var online = store.online, signed = online && !!S.myId, ready = signed && S.itemsReady, prof = S.homeView === 'profile';
-  $('#homeSignedOut').hidden = signed; $('#homeLibrary').hidden = !ready || prof; $('#homeLoading').hidden = !signed || ready;
-  $('#homeProfile').hidden = !ready || !prof;
-  if (ready && prof) { renderProfile(); return; }
+  var online = store.online, signed = online && !!S.myId, ready = signed && S.itemsReady, view = S.homeView || 'library';
+  $('#homeSignedOut').hidden = signed; $('#homeLibrary').hidden = !ready || view !== 'library'; $('#homeLoading').hidden = !signed || ready;
+  $('#homeProfile').hidden = !ready || view !== 'profile';
+  $('#homeFriends').hidden = !ready || view !== 'friends';
+  $('#homeFriend').hidden = !ready || view !== 'friend';
+  if (ready && view === 'profile') { renderProfile(); return; }
+  if (ready && view === 'friends') { renderFriends(); return; }
+  if (ready && view === 'friend') { renderFriend(); return; }
   $('#homeSignIn').hidden = !online;
   $('#signedOutText').textContent = online
     ? 'Sign in with Google to keep your images, folders and projects in your account and open them on any device.'
@@ -97,26 +134,32 @@ function renderHome() {
   // Folders hold images only, and projects sit at the top level.
   $('#newFolder').disabled = !!at && at.type === 'folder';
   $('#newProject').disabled = !!at;
+  var asks = pendingFriendRequests().length, fb = $('#friendsCount');
+  fb.textContent = asks; fb.hidden = !asks;
+}
+// list: [{ label, hash }], the last one being the current page.
+function fillCrumbs(nav, list) {
+  nav.innerHTML = '';
+  list.forEach(function (c, i) {
+    if (i) { var s = document.createElement('span'); s.className = 'crumbsep'; s.textContent = '›'; nav.appendChild(s); }
+    var current = i === list.length - 1, a = document.createElement(current ? 'span' : 'a'); a.textContent = c.label;
+    if (current) a.setAttribute('aria-current', 'page'); else a.href = c.hash;
+    nav.appendChild(a);
+  });
 }
 function renderCrumbs() {
-  var nav = $('#crumbs'), path = pathTo(S.homeAt); nav.innerHTML = '';
-  var add = function (label, hash, current) {
-    if (nav.childNodes.length) { var s = document.createElement('span'); s.className = 'crumbsep'; s.textContent = '›'; nav.appendChild(s); }
-    var a = document.createElement(current ? 'span' : 'a'); a.textContent = label;
-    if (current) a.setAttribute('aria-current', 'page'); else a.href = hash;
-    nav.appendChild(a);
-  };
-  add('Library', '#/', !path.length);
-  path.forEach(function (it, i) { add(it.name, '#/c/' + it.id, i === path.length - 1); });
+  fillCrumbs($('#crumbs'), [{ label: 'Library', hash: '#/' }].concat(pathTo(S.homeAt).map(function (it) { return { label: it.name, hash: '#/c/' + it.id }; })));
 }
-function cardSub(it) {
+function cardSub(it, items) {
   if (it.type === 'image') return it.px ? 'Pixel art, ' + it.px.cols + ' × ' + it.px.rows + ' tiles of ' + it.px.tile + ' px' : (it.w || '?') + ' × ' + (it.h || '?');
-  var n = childrenOf(it.id).length;
+  var n = childrenOf(it.id, items).length;
   return (it.type === 'project' ? 'Project, ' : 'Folder, ') + n + (n === 1 ? ' item' : ' items');
 }
 function openItem(it) { location.hash = it.type === 'image' ? '#/d/' + it.id : '#/c/' + it.id; }
-function makeHomeCard(it) {
+// friend: { uid, items } for a card in a friend's library, which only opens (no options menu).
+function makeHomeCard(it, friend) {
   var d = document.createElement('div'); d.className = 'hcard ' + it.type; d.setAttribute('role', 'button'); d.tabIndex = 0;
+  var open = friend ? function () { location.hash = '#/u/' + friend.uid + (it.type === 'image' ? '/d/' : '/c/') + it.id; } : function () { openItem(it); };
   var th = document.createElement('div'); th.className = 'hthumb';
   if (it.type === 'image') {
     if (it.px) th.classList.add('checker');
@@ -126,14 +169,20 @@ function makeHomeCard(it) {
   } else th.innerHTML = icon(it.type, 44);
   var meta = document.createElement('div'); meta.className = 'hmeta';
   var nm = document.createElement('span'); nm.className = 'hname'; nm.textContent = it.name;
-  var sub = document.createElement('span'); sub.className = 'hsub'; sub.textContent = cardSub(it);
-  meta.append(nm, sub);
-  var more = document.createElement('button'); more.className = 'ibtn sm hmore'; more.innerHTML = icon('more', 18);
-  more.setAttribute('aria-label', 'Options for ' + it.name); more.title = 'Options';
-  more.addEventListener('click', function (e) { e.stopPropagation(); openCardMenu(it, more); });
-  d.append(th, meta, more);
-  d.addEventListener('click', function () { openItem(it); });
-  d.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openItem(it); } });
+  var sub = document.createElement('span'); sub.className = 'hsub'; sub.textContent = cardSub(it, friend && friend.items);
+  meta.append(nm, sub); d.append(th, meta);
+  if (!friend) {
+    if (it.private === true) {
+      var lock = document.createElement('span'); lock.className = 'hlock'; lock.innerHTML = icon('lock', 14); lock.title = 'Private: only you can see this';
+      d.appendChild(lock); sub.textContent += ' · Private';
+    }
+    var more = document.createElement('button'); more.className = 'ibtn sm hmore'; more.innerHTML = icon('more', 18);
+    more.setAttribute('aria-label', 'Options for ' + it.name); more.title = 'Options';
+    more.addEventListener('click', function (e) { e.stopPropagation(); openCardMenu(it, more); });
+    d.appendChild(more);
+  }
+  d.addEventListener('click', open);
+  d.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   return d;
 }
 
@@ -143,6 +192,7 @@ function resetDelete() { clearTimeout(delTimer); var b = $('#cmDelete'); b.class
 function openCardMenu(it, btn) {
   menuItem = it; resetDelete();
   var m = $('#cardMenu'); $('#cmMove').hidden = it.type === 'project'; $('#cmDuplicate').hidden = it.type !== 'image';
+  $('#cmPrivate').textContent = it.private === true ? 'Show to friends' : 'Make private';
   m.hidden = false;
   var r = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = clamp(r.right - w, 8, window.innerWidth - w - 8) + 'px';
@@ -166,6 +216,7 @@ async function duplicateImage(it) {
   try {
     var now = Date.now(), src = it.layers || [], layers = src.map(function (m) { return Object.assign({}, m, { id: uid() + uid() }); });
     var id = await store.createItem({ type: 'image', name: (it.name + ' copy').slice(0, 60), parent: it.parent || '', created: now, updated: now,
+      private: it.private === true || privateAt(it.parent || ''),
       w: it.w, h: it.h, px: it.px || null, layers: [], active: '', count: it.count || layers.length, thumb: it.thumb || '' });
     for (var i = 0; i < src.length; i++) {
       var blob = await store.downloadLayer(it.id, src[i].id);
@@ -232,7 +283,13 @@ function openMoveDialog(it) {
   $('#dlgMoveTitle').textContent = 'Move ' + it.name + ' to';
   runDialog($('#dlgMove'), function () {
     var sel = $('#moveList input:checked'); if (!sel || sel.value === (it.parent || '')) return;
-    store.updateItem(it.id, { parent: sel.value, updated: Date.now() }).catch(function () { toast('Could not move it. Try again.'); });
+    var list = [{ id: it.id, patch: { parent: sel.value, updated: Date.now() } }];
+    // Moving into a private project or folder makes it (and anything in it) private too.
+    if (privateAt(sel.value)) {
+      list[0].patch.private = true;
+      descendants(it.id).forEach(function (x) { list.push({ id: x.id, patch: { private: true } }); });
+    }
+    store.updateItems(list).catch(function () { toast('Could not move it. Try again.'); });
   });
 }
 
@@ -296,6 +353,8 @@ function initLibrary() {
   });
   $('#cmMove').addEventListener('click', function () { if (menuItem) openMoveDialog(menuItem); });
   $('#cmDuplicate').addEventListener('click', function () { if (menuItem) duplicateImage(menuItem); });
+  $('#cmPrivate').addEventListener('click', function () { if (menuItem) setPrivate(menuItem, menuItem.private !== true); });
+  $('#friendsBtn').addEventListener('click', function () { location.hash = '#/friends'; });
   $('#cmDelete').addEventListener('click', function (e) {
     var b = $('#cmDelete'), it = menuItem; if (!it) return;
     if (!b.classList.contains('armed')) {

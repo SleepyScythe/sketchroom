@@ -4,7 +4,7 @@
 
 /* ---------- profiles ----------
    profiles/{uid}: { username, displayName, bio, pronouns, location, links [up to 3 https URLs], avatar (small data URL or ''),
-   color, joined, updated }. Signed-in users can read profiles (for the friends list later). The Google name and email
+   color, joined, updated }. Signed-in users can read profiles (friends.js shows them). The Google name and email
    are never copied into a profile. usernames/{name}: { uid } reserves each name (see store.saveProfile). */
 var USERNAME_RE = /^[a-z0-9_.]{3,20}$/;
 var PROFILE_COLORS = ['#56c4b4', '#3a78d8', '#8a5fd6', '#e2569b', '#ef6a4c', '#f4a259', '#4fae6a', '#6d7580'];
@@ -28,8 +28,10 @@ async function claimUsername(name, base, oldName) {
     return e && e.code === 'permission-denied' ? '@' + name + ' is taken. Try another.' : 'Could not save. Check your connection and try again.';
   }
 }
+// Profiles can belong to other people, so their color is only used when it really is a color.
+function safeColor(c) { return /^#[0-9a-f]{6}$/i.test(String(c || '')) ? c : '#6d7580'; }
 function avatarEl(p, cls) {
-  var d = document.createElement('div'); d.className = 'avatar ' + (cls || ''); d.style.background = (p && p.color) || '#6d7580';
+  var d = document.createElement('div'); d.className = 'avatar ' + (cls || ''); d.style.background = safeColor(p && p.color);
   if (p && typeof p.avatar === 'string' && p.avatar.indexOf('data:image/') === 0) {
     var img = document.createElement('img'); img.src = p.avatar; img.alt = ''; d.appendChild(img);
   } else d.textContent = p && p.username ? p.username[0].toUpperCase() : '?';
@@ -86,7 +88,7 @@ function renderProfile() {
   });
   var items = Object.keys(S.items).map(function (k) { return S.items[k]; });
   var count = function (t) { return items.filter(function (x) { return x.type === t; }).length; };
-  var stats = [[count('image'), 'Images'], [count('folder'), 'Folders'], [count('project'), 'Projects'], [S.mine.length, 'Brushes'], [S.myFonts.length + S.uploadedFonts.length, 'Fonts'], [S.saved.length, 'Saved colors']];
+  var stats = [[count('image'), 'Images'], [count('folder'), 'Folders'], [count('project'), 'Projects'], [S.friends.length, 'Friends'], [S.mine.length, 'Brushes'], [S.myFonts.length + S.uploadedFonts.length, 'Fonts'], [S.saved.length, 'Saved colors']];
   var st = $('#pStats'); st.innerHTML = '';
   stats.forEach(function (s) {
     var d = document.createElement('div'), n = document.createElement('strong'), l = document.createElement('span');

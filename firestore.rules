@@ -2,13 +2,15 @@ rules_version = '2';
 
 // Sketchroom Firestore rules. Paste into Firebase console > Firestore Database > Rules, then Publish.
 // Free library (brushes, fonts): everyone reads, admins write.
-// users/{uid}/...: private to that signed-in user.
+// users/{uid}/...: private to that signed-in user, except that friends can read library items that aren't private.
 // admins/{uid}: created by hand in the console. Nobody can write it from the app.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
     function isUser(uid) { return signedIn() && request.auth.uid == uid; }
+    // The signed-in person is in uid's friends list (it is only ever written when uid accepted, or asked for, the friendship).
+    function isFriendOf(uid) { return signedIn() && exists(/databases/$(database)/documents/users/$(uid)/friends/$(request.auth.uid)); }
     function validBrush(d) {
       return d.keys().hasOnly(['name', 'params', 'at', 'by'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 40
@@ -16,8 +18,9 @@ service cloud.firestore {
         && d.at is number;
     }
     function validItem(d) {
-      return d.keys().hasOnly(['type', 'name', 'parent', 'created', 'updated', 'w', 'h', 'px', 'layers', 'active', 'count', 'thumb'])
+      return d.keys().hasOnly(['type', 'name', 'parent', 'created', 'updated', 'w', 'h', 'px', 'layers', 'active', 'count', 'thumb', 'private'])
         && d.type in ['project', 'folder', 'image']
+        && (!('private' in d) || d.private is bool)
         && d.name is string && d.name.size() > 0 && d.name.size() <= 60
         && d.parent is string && d.parent.size() <= 40
         && d.created is number && d.updated is number
@@ -58,9 +61,39 @@ service cloud.firestore {
         && request.resource.data.at is number;
     }
     // The library: projects, folders and images. An image's layer PNGs are in Cloud Storage (see storage.rules).
+    // Friends can read items whose private flag is false (their queries must ask for private == false).
     match /users/{uid}/items/{id} {
-      allow read, delete: if isUser(uid);
+      allow read: if isUser(uid) || (isFriendOf(uid) && resource.data.private == false);
+      allow delete: if isUser(uid);
       allow create, update: if isUser(uid) && validItem(request.resource.data);
+    }
+    // Friends: users/{uid}/friends/{other} = { since }. Accepting a request writes both sides and deletes the request
+    // in one batch. Each side may only be created while that request exists (exists() sees the data before the batch)
+    // and only if the same batch deletes it, so nobody can add themselves to someone else's list.
+    match /users/{uid}/friends/{other} {
+      allow read: if isUser(uid);
+      allow create: if signedIn() && uid != other
+        && request.resource.data.keys().hasOnly(['since']) && request.resource.data.since is number
+        && ((request.auth.uid == uid
+              && exists(/databases/$(database)/documents/friendRequests/$(other + '_' + uid))
+              && !existsAfter(/databases/$(database)/documents/friendRequests/$(other + '_' + uid)))
+          || (request.auth.uid == other
+              && exists(/databases/$(database)/documents/friendRequests/$(uid + '_' + other))
+              && !existsAfter(/databases/$(database)/documents/friendRequests/$(uid + '_' + other))));
+      // Either friend can end the friendship, on both sides.
+      allow delete: if signedIn() && (request.auth.uid == uid || request.auth.uid == other);
+    }
+    // Friend requests: friendRequests/{from}_{to} = { from, to, at }. Only the two people involved can see or delete one.
+    match /friendRequests/{id} {
+      allow read, delete: if signedIn() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['from', 'to', 'at'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string && request.resource.data.to != request.auth.uid
+        && id == request.auth.uid + '_' + request.resource.data.to
+        && request.resource.data.at is number
+        && exists(/databases/$(database)/documents/profiles/$(request.resource.data.to))
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(request.resource.data.to));
     }
     match /users/{uid}/uploadedFonts/{id} {
       allow read, delete: if isUser(uid);

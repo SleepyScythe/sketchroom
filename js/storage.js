@@ -8,6 +8,7 @@
    Private: users/{uid}/brushes/{id}, users/{uid}/fonts/{id}. Only that user.
    Saved colors: users/{uid}/settings/colors { colors: [...] } when signed in, otherwise localStorage.
    Drawing library: users/{uid}/items/{id} (projects, folders, images) and the layer PNGs in Cloud Storage.
+   Friends: users/{uid}/friends/{friendUid} and friendRequests/{from}_{to}. Friends read each other's non-private items.
    Admins: admins/{uid} exists. Created by hand in the Firebase console. */
 var storeReady = null;
 var store = { online: false, add: null, update: null, remove: null, addFont: null, signIn: null, signOut: null,
@@ -110,16 +111,25 @@ async function initStore() {
   // The drawing library. Items are kept in S.items by the listener below.
   store.createItem = async function (data) { var id = uid() + uid(); await home().collection('items').doc(id).set(data); return id; };
   store.updateItem = async function (id, patch) { await home().collection('items').doc(id).update(patch); };
+  // Several items at once ([{ id, patch }]), e.g. making a folder and everything in it private.
+  store.updateItems = async function (list) {
+    for (var i = 0; i < list.length; i += 400) {
+      var b = db.batch();
+      list.slice(i, i + 400).forEach(function (x) { b.update(home().collection('items').doc(x.id), x.patch); });
+      await b.commit();
+    }
+  };
   store.deleteItem = async function (id) { await home().collection('items').doc(id).delete(); };
-  var layerRef = function (imgId, layerId) {
+  // owner: whose library the image is in (a friend's), or the signed-in user when left out.
+  var layerRef = function (imgId, layerId, owner) {
     if (!files) throw new Error('Cloud Storage is not available');
-    return files.ref('users/' + auth.currentUser.uid + '/images/' + imgId + '/' + layerId + '.png');
+    return files.ref('users/' + (owner || auth.currentUser.uid) + '/images/' + imgId + '/' + layerId + '.png');
   };
   // no-cache: the same file is overwritten on every save, so browsers must not reuse an old copy.
   store.uploadLayer = async function (imgId, layerId, blob) { await layerRef(imgId, layerId).put(blob, { contentType: 'image/png', cacheControl: 'no-cache' }); };
-  store.downloadLayer = async function (imgId, layerId) {
+  store.downloadLayer = async function (imgId, layerId, owner) {
     var url;
-    try { url = await layerRef(imgId, layerId).getDownloadURL(); }
+    try { url = await layerRef(imgId, layerId, owner).getDownloadURL(); }
     catch (e) { if (e && e.code === 'storage/object-not-found') return null; throw e; }
     var r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw new Error('download failed ' + r.status);
@@ -127,6 +137,36 @@ async function initStore() {
   };
   store.deleteLayer = async function (imgId, layerId) {
     try { await layerRef(imgId, layerId).delete(); } catch (e) { if (!e || e.code !== 'storage/object-not-found') throw e; }
+  };
+  // Friends. friendRequests/{from}_{to} = { from, to, at }. Accepting writes users/{uid}/friends/{friendUid} = { since }
+  // on both sides and deletes the request in one batch; the rules only allow that while the request exists.
+  // Friends can read each other's library items whose private flag is false, and those images' layer files.
+  store.sendFriendRequest = async function (to) {
+    var me = auth.currentUser.uid;
+    await db.collection('friendRequests').doc(me + '_' + to).set({ from: me, to: to, at: Date.now() });
+  };
+  store.dropFriendRequest = async function (r) { await db.collection('friendRequests').doc(r.from + '_' + r.to).delete(); };
+  store.acceptFriendRequest = async function (from) {
+    var me = auth.currentUser.uid, users = db.collection('users'), b = db.batch(), now = Date.now();
+    b.set(users.doc(me).collection('friends').doc(from), { since: now });
+    b.set(users.doc(from).collection('friends').doc(me), { since: now });
+    b.delete(db.collection('friendRequests').doc(from + '_' + me));
+    await b.commit();
+  };
+  store.removeFriend = async function (other) {
+    var me = auth.currentUser.uid, users = db.collection('users'), b = db.batch();
+    b.delete(users.doc(me).collection('friends').doc(other));
+    b.delete(users.doc(other).collection('friends').doc(me));
+    await b.commit();
+  };
+  store.getProfile = async function (id) { var d = await db.collection('profiles').doc(id).get(); return d.exists ? d.data() : null; };
+  // A friend's library, without their private items. Returns a function that stops listening.
+  store.watchFriendItems = function (owner, onItems, onError) {
+    return db.collection('users').doc(owner).collection('items').where('private', '==', false).limit(5000).onSnapshot(function (snap) {
+      var items = {};
+      snap.docs.forEach(function (d) { var v = d.data() || {}; v.id = d.id; items[d.id] = v; });
+      onItems(items);
+    }, onError);
   };
   store.approveRequest = async function (r) { await store.add(r.name, cleanParams(r.params), 'library'); await db.collection('requests').doc(r.id).delete(); };
   store.declineRequest = async function (r) { await db.collection('requests').doc(r.id).delete(); };
@@ -147,11 +187,13 @@ async function initStore() {
         var items = {};
         snap.docs.forEach(function (d) { var v = d.data() || {}; v.id = d.id; items[d.id] = v; });
         S.items = items; S.itemsReady = true; renderHome();
+        if (!snap.metadata.fromCache) fillPrivacy();
       }, function () { S.itemsReady = true; renderHome(); toast('Your library could not be loaded. Check your connection.'); }));
     }
     S.myId = user ? user.uid : null;
     S.myName = user ? (user.displayName || user.email || 'You') : '';
     S.canEdit = false; S.mine = []; S.myFonts = []; S.requests = []; S.myRequests = []; S.uploadedFonts = []; S.profile = null; S.messages = [];
+    S.friends = []; S.friendIn = []; S.friendOut = []; S.people = {}; closeFriend();
     if (user) {
       var mine = db.collection('users').doc(user.uid);
       try { S.canEdit = (await db.collection('admins').doc(user.uid).get()).exists; } catch (e) { S.canEdit = false; }
@@ -189,6 +231,13 @@ async function initStore() {
           renderAccount(); renderProfile();
         }, function () { /* the inbox is optional */ }));
       }
+      unsub.push(mine.collection('friends').limit(500).onSnapshot(function (snap) {
+        S.friends = snap.docs.map(function (d) { return { uid: d.id, since: (d.data() || {}).since || 0 }; });
+        friendsChanged();
+      }, function () { /* friends are optional */ }));
+      var fr = db.collection('friendRequests'), reqList = function (snap) { return snap.docs.map(function (d) { return d.data() || {}; }); };
+      unsub.push(fr.where('to', '==', user.uid).limit(200).onSnapshot(function (snap) { S.friendIn = reqList(snap); friendsChanged(); }, function () { /* optional */ }));
+      unsub.push(fr.where('from', '==', user.uid).limit(200).onSnapshot(function (snap) { S.friendOut = reqList(snap); friendsChanged(); }, function () { /* optional */ }));
       var reqs = db.collection('requests');
       if (S.canEdit) {
         unsub.push(reqs.orderBy('at', 'asc').limit(100).onSnapshot(function (snap) {
@@ -213,9 +262,11 @@ async function initStore() {
 function renderAccount() {
   $('#accountWrap').hidden = !store.online;
   var btn = $('#accountBtn'), handle = S.profile ? '@' + S.profile.username : 'Account';
-  var unread = S.canEdit ? S.messages.filter(function (m) { return !m.read; }).length : 0;
-  btn.textContent = S.myId ? handle + (unread ? ' •' : '') : 'Sign in';
-  btn.title = S.myId ? 'Signed in as ' + handle + (unread ? '. ' + unread + ' unread message' + (unread === 1 ? '' : 's') : '') : 'Sign in with Google to save your own brushes';
+  var unread = S.canEdit ? S.messages.filter(function (m) { return !m.read; }).length : 0, asks = pendingFriendRequests().length;
+  btn.textContent = S.myId ? handle + (unread || asks ? ' •' : '') : 'Sign in';
+  btn.title = S.myId ? 'Signed in as ' + handle + (unread ? '. ' + unread + ' unread message' + (unread === 1 ? '' : 's') : '')
+    + (asks ? '. ' + asks + ' friend request' + (asks === 1 ? '' : 's') : '') : 'Sign in with Google to save your own brushes';
+  $('#myFriends').textContent = 'Friends' + (asks ? ' (' + asks + ' new)' : '');
   btn.classList.toggle('primary', !S.myId);
   $('#accountName').textContent = S.myId ? handle + (S.canEdit ? ' (owner)' : '') : '';
   if (!S.myId) $('#accountMenu').hidden = true;
