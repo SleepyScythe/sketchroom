@@ -17,7 +17,7 @@
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 <div class="home" id="home" hidden>
@@ -58,7 +58,10 @@
       <p class="homeempty" id="homeEmpty" hidden></p>
     </section>
     <section class="profilepage" id="homeProfile" hidden>
-      <nav class="crumbs" aria-label="Where you are"><a href="#/">Library</a><span class="crumbsep">›</span><span aria-current="page">Profile</span></nav>
+      <div class="ptop">
+        <button class="btn backbtn" id="pBack"><span data-icon="back"></span>Back to library</button>
+        <span class="ptitle">Profile</span>
+      </div>
       <div class="pcard">
         <div class="pbanner" id="pBanner"></div>
         <div class="phead">
@@ -438,25 +441,25 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=9"></script>
-<script src="js/core.js?v=9"></script>
-<script src="js/config.js?v=9"></script>
-<script src="js/engine.js?v=9"></script>
-<script src="js/layers.js?v=9"></script>
-<script src="js/brushes.js?v=9"></script>
-<script src="js/importbrush.js?v=9"></script>
-<script src="js/storage.js?v=9"></script>
-<script src="js/text.js?v=9"></script>
-<script src="js/canvas.js?v=9"></script>
-<script src="js/color.js?v=9"></script>
-<script src="js/tools.js?v=9"></script>
-<script src="js/select.js?v=9"></script>
-<script src="js/pixel.js?v=9"></script>
-<script src="js/pad.js?v=9"></script>
-<script src="js/files.js?v=9"></script>
-<script src="js/document.js?v=9"></script>
-<script src="js/library.js?v=9"></script>
-<script src="js/profile.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
+<script src="js/firebase-config.js?v=10"></script>
+<script src="js/core.js?v=10"></script>
+<script src="js/config.js?v=10"></script>
+<script src="js/engine.js?v=10"></script>
+<script src="js/layers.js?v=10"></script>
+<script src="js/brushes.js?v=10"></script>
+<script src="js/importbrush.js?v=10"></script>
+<script src="js/storage.js?v=10"></script>
+<script src="js/text.js?v=10"></script>
+<script src="js/canvas.js?v=10"></script>
+<script src="js/color.js?v=10"></script>
+<script src="js/tools.js?v=10"></script>
+<script src="js/select.js?v=10"></script>
+<script src="js/pixel.js?v=10"></script>
+<script src="js/pad.js?v=10"></script>
+<script src="js/files.js?v=10"></script>
+<script src="js/document.js?v=10"></script>
+<script src="js/library.js?v=10"></script>
+<script src="js/profile.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>

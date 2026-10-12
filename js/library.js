@@ -67,6 +67,7 @@ async function route() {
     return;
   }
   S.homeView = r.kind === 'profile' ? 'profile' : 'library';
+  if (r.kind !== 'profile') S.lastLibrary = r.id ? '#/c/' + r.id : '#/'; // where the profile's Back button returns to
   S.homeAt = r.kind === 'profile' ? '' : r.id; showView('home'); renderHome(); checkSketch();
 }
 // Signing in or out: an open library image can't stay open signed out.

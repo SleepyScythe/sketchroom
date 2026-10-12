@@ -205,5 +205,7 @@ function initProfile() {
   $('#formContact').addEventListener('submit', sendContact);
   $$('[data-contact]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); openContact(b.dataset.contact); }); });
   $('#pSignOut').addEventListener('click', function () { store.signOut(); location.hash = '#/'; });
+  // Back returns to the library folder or project you came from (the top level if you came straight to the profile).
+  $('#pBack').addEventListener('click', function () { location.hash = S.lastLibrary || '#/'; });
   $('#myProfile').addEventListener('click', function () { location.hash = '#/profile'; });
 }

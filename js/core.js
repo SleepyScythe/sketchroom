@@ -38,6 +38,7 @@ var ICONS = {
   lock: ['M5 11h14v10H5z', 'M8 11V7a4 4 0 0 1 8 0v4'],
   unlock: ['M5 11h14v10H5z', 'M8 11V7a4 4 0 0 1 7.7-1.5'],
   merge: ['M12 3v11', 'm7 9 5 5 5-5', 'M5 20h14'],
+  back: ['M19 12H5', 'm12 19-7-7 7-7'],
   library: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
   folder: ['M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z'],
   project: ['M3 8h18v12H3z', 'M8 8V5h8v3', 'M3 13h18'],
