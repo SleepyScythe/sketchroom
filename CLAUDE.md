@@ -57,6 +57,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/app.js` | Event wiring (`wire()`), tabs, keyboard shortcuts, and `init()`. Must load last |
 | `firestore.rules`, `storage.rules` | Security rules for Firestore and Cloud Storage. Not deployed automatically: paste into the Firebase console when changed |
 | `tools/serve.ps1` | Tiny static server on http://localhost:8000 for local testing (`.claude/launch.json` runs it) |
+| `og-image.png`, `tools/og-image.html` | The 1200 × 630 picture shown when a Sketchroom link is shared (`og:image` in `index.html`). The tool page draws it (and the hub's with `?hub`). The command to remake it with headless Edge is in the page's comment |
 | `favicon.svg`, `.nojekyll`, `.gitignore`, `CNAME` | Site icon. `.nojekyll` tells GitHub Pages to serve files as they are. `CNAME` holds the site's address, `sketchroom.sleepyscythe.com` |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Installable app. `sw.js` is a network-first service worker, so it opens offline but never serves stale files when online. The PNG icons were drawn with System.Drawing from the favicon's curve |
 
@@ -119,6 +120,11 @@ It was first built in Claude and published as a private artifact (https://claude
   - **What friends see:** each other's profile, and every library item with `private == false` (read only), including those images' layer PNGs. The image viewer composites the visible layers with their opacity and blend, on white (pixel art on a checkerboard). Nothing is saved, and friends can't copy or export.
   - **Notifications:** pending requests put a dot on the account button and a count on the library's Friends button.
   - **Testing note:** the accept and view paths were tested on 2026-10-12 with a fake second account created in the console (since deleted) and the Rules Playground. They have not yet been tried by two real people.
+- **Blocking, reports and taking down profiles** (`friends.js`, `profile.js`, built 2026-10-16 before going public):
+  - **Block** (incoming requests, and a person's page `#/u/<uid>`): `store.blockUser` writes `users/{me}/blocked/{them}` and, in the same batch, deletes the friendship on both sides and any requests between you. Then it takes them out of your shares, one share at a time (each share check costs up to 6 rule lookups, and a batch may only make 20). The rules stop a blocked person sending you requests or reading your profile. They aren't told. The friends page lists blocked people with Unblock.
+  - **Report** (a person's page): opens the contact form as "Report @name" and sends `about: <uid>` with the message. In the owner's inbox the report says who it's about, with Open their page.
+  - **Remove profile** (admins, on a person's page): deletes `profiles/{uid}` and their `usernames/{name}`. Their library stays, and they're asked for a new username next time. There's no ban yet: they could put the same thing back.
+  - **Tested 2026-10-16** with the owner's account: block and unblock a test uid, a report reaching the inbox, the buttons and the report form. Not tried between two real people.
 - **Drawing together** (`live.js`, built 2026-10-12):
   - **Sharing:** the owner of an image picks up to 5 friends in the Draw together dialog (the people button in the editor's top bar, or "Draw together…" in a card's menu). That writes `shares/{owner}_{imageId}`. Unticking everyone deletes it.
   - **Friends' side:** shared images show under "Shared with you" at the top of their library (`watchSharedItems` follows each owner's item for the card). They open at `#/s/<owner>/<imageId>`. `openImage(id, token, { owner, item })` loads the owner's layers, and `cloudSave` saves into the owner's item and files (`doc.owner`). Friends may only change the layers, thumbnail, active layer, count and updated (the rules check it).
@@ -204,7 +210,7 @@ It was first built in Claude and published as a private artifact (https://claude
   - **Domain:** `sleepyscythe.com`, bought on Cloudflare (Registrar and DNS, in the owner's Cloudflare account), renews 2027-10-16.
   - **DNS records:** A and AAAA for `@` point to GitHub Pages' IPs (185.199.108–111.153, 2606:50c0:8000–8003::153), and `www` and `sketchroom` are CNAMEs to `sleepyscythe.github.io`. All are **DNS only** (grey cloud): Cloudflare's proxy would stop GitHub issuing the HTTPS certificate. A TXT record `_github-pages-challenge-SleepyScythe` verifies the domain in the owner's GitHub settings (Pages > Verified domains), so nobody else can use it on GitHub.
   - **Email:** `hello@sleepyscythe.com` forwards to the owner's usual Gmail through Cloudflare Email Routing (set up 2026-10-16, free). Cloudflare added the MX, SPF and DKIM records itself, and they're locked while routing is on. It only receives. The catch-all is off, so other addresses bounce. The owner tried a Google business email and gave up on it; don't suggest Google Workspace.
-  - **Hub page:** https://sleepyscythe.com lists the apps. It's the repo https://github.com/SleepyScythe/SleepyScythe.github.io, kept locally at `C:\SleepyScytheStudios`, previewed with the `hub` entry in `.claude/launch.json` on port 8001. Its `404.html` sends `/sketchroom` links in any capitals to sketchroom.sleepyscythe.com. New apps get a card there and their own subdomain (a CNAME record plus a `CNAME` file in their repo). Sketchroom's homepage top bar starts with a SleepyScytheStudios button back to the hub (`.hublink`, only the crescent on phones).
+  - **Hub page:** https://sleepyscythe.com lists the apps. It's the repo https://github.com/SleepyScythe/SleepyScythe.github.io, kept locally at `C:\SleepyScytheStudios`, previewed with the `hub` entry in `.claude/launch.json` on port 8001. Its `404.html` sends `/sketchroom` links in any capitals to sketchroom.sleepyscythe.com. New apps get a card there and their own subdomain (a CNAME record plus a `CNAME` file in their repo). The hub also has a link-preview picture (`og-image.png`), `hello@sleepyscythe.com` in its footer, and a Support box for donations that stays hidden until `DONATE_URL` in its script is set to the donation page (the owner makes that page themselves). Sketchroom's homepage top bar starts with a SleepyScytheStudios button back to the hub (`.hublink`, only the crescent on phones).
   - **Order matters:** a custom domain on the `SleepyScythe.github.io` repo makes GitHub redirect every project site that has no domain of its own to `sleepyscythe.com/<repo>`. Give a project its own domain (with DNS, Firebase and CORS ready) first. Pushing the hub's `CNAME` first took Sketchroom down for about 5 minutes on 2026-10-16.
 - **Firebase project:** `sketchroom-abab3`, owned by the owner's Google account. Console: https://console.firebase.google.com/project/sketchroom-abab3
   - **Plan:** Blaze (pay as you go) since 2026-10-11. Monthly budget alert ("Firebase Project sketchroom-abab3" in Google Cloud > Billing > Budgets & alerts): $5, raised to $20 on 2026-10-12 at the owner's request, emailing at 50%, 90% and 100%. It only alerts, it doesn't stop spending (no spend cap is set). The billing account was on a free trial with $300 credit.
@@ -223,6 +229,7 @@ It was first built in Claude and published as a private artifact (https://claude
   - `users/{uid}/uploadedFonts/{id}`: uploaded font files `{ family, data (base64), at }`, 700 KB max.
   - `users/{uid}/items/{id}`: the library (see "How it works"). Friends can read items with `private == false`.
   - `users/{uid}/friends/{friendUid}`: `{ since }`, readable only by `uid`. Written on both sides when a request is accepted.
+  - `users/{uid}/blocked/{otherUid}`: `{ at }`, readable and writable only by `uid`. Checked by the friend request and profile rules.
   - `friendRequests/{from}_{to}`: `{ from, to, at }`, readable and deletable by those two people. Can only be sent to someone with a profile who isn't already a friend.
   - `shares/{owner}_{imageId}`: `{ owner, image, members (up to 5 of the owner's friends), name, at }`, written only by the owner. Members can read and update that image's item (limited fields) and read and write its layer files.
   - `shares/{sid}/ops/{opId}`: live changes `{ by, at (server time), seq, cid, kind: 'px' | 'layers' | 'stroke', … }`. The owner and members read and create them. The author or the owner deletes them.
@@ -235,6 +242,12 @@ It was first built in Claude and published as a private artifact (https://claude
 - **Security rules:** `firestore.rules` and `storage.rules`. After editing one, paste it into Firebase console > Firestore Database > Rules (or Storage > Rules) and press Publish.
   - **Storage reads Firestore:** the Storage rules call `firestore.exists()` / `firestore.get()` to check friendship and the item's `private` flag. That needed a one-time IAM role for the Storage service account. The owner approved it, and it was attached from the console's "Provision cross-service rules" dialog on 2026-10-12. Each friend's layer download costs a couple of Firestore reads.
   - **Drawing together:** the rules for `shares` and its ops, the members' access to the item and its layer files, and the friend check (up to 5 members, one `exists` each) were published on 2026-10-12.
+  - **Security review (2026-10-16, published that day):**
+    - **Shares:** a share member only gets in while still a friend of the owner (Firestore and Storage), so removing or blocking a friend ends their access at once. Before, it lasted until the owner unshared.
+    - **Usernames:** changing your username must delete the old reservation in the same batch (`releasesOldName`), so nobody can hoard names.
+    - **Checked fields:** profile links must be `http(s)://` strings of at most 200 characters, the picture `''` or a `data:image/png|jpeg` URL, and item thumbnails the same. The app already checked these when showing them.
+    - **Live and brush tips:** the app only loads live masks and patches, and brush tips, from inline `data:` pictures (`livePx`, `tipImage`), never from a web address.
+    - **Rules Playground:** it returned "An unknown error occurred" for every run after the first that day. The rules were checked with the owner's account instead.
   - **Order:** publish rules before pushing code that writes new fields (`validItem` uses `hasOnly`, so the old rules reject unknown fields).
 - **Authorized domains:** sign-in only works on domains listed in Authentication > Settings > Authorized domains (`localhost`, `sketchroom-abab3.firebaseapp.com`, `sketchroom-abab3.web.app`, `sleepyscythe.github.io`, and `sketchroom.sleepyscythe.com` since 2026-10-16).
 - **Fallback:** if `FIREBASE_CONFIG` is `null`, the SDK fails to load, or the page is opened from `file://`, then `store.online` is false. The homepage then offers only the quick sketch, and brushes and fonts use `localStorage`.
@@ -317,7 +330,9 @@ There is no test suite. Check changes by serving the folder (see "Running locall
 - accept and decline from the other account
 - open each other's libraries, folders and images
 - make an item private and confirm it disappears for the friend
-- remove the friend
+- remove the friend: images you shared with them stop opening for them
+- block from a request and from their page: they can't send a new request or see your profile, and Unblock on the friends page undoes it
+- report someone: it reaches the owner's inbox with Open their page
 
 **Drawing together** (two accounts that are friends, or two tabs of one account for the owner's side):
 - share an image with a friend from the editor's people button. It shows under Shared with you for them
