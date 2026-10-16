@@ -122,7 +122,8 @@ function liveImage(url) {
 async function livePx(lv, op) {
   if (typeof op.patch !== 'string' || op.patch.indexOf('data:image/png') !== 0) return;
   if (!layerById(op.layer)) { (lv.pending[op.layer] = lv.pending[op.layer] || []).push(op); return; } // its layer arrives later
-  var patch = await liveImage(op.patch), mask = !op.full && typeof op.mask === 'string' ? await liveImage(op.mask) : null;
+  if (!op.full && (typeof op.mask !== 'string' || op.mask.indexOf('data:image/png') !== 0)) return; // only pictures sent inline, never a web address
+  var patch = await liveImage(op.patch), mask = !op.full ? await liveImage(op.mask) : null;
   var L = layerById(op.layer); if (S.live !== lv || !L) return;
   // A local layer that hasn't been sent yet: it goes out whole on the next flush, with this change in it.
   if (!lv.shadows[L.id]) { lv.shadows[L.id] = liveShadow(null); lv.touched[L.id] = 'all'; }

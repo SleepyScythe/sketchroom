@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Link preview image</title>
+<!-- Not linked from the site. Draws the 1200 × 630 picture that shows when a link is shared (og:image).
+     Sketchroom's: tools/og-image.html. The hub's: tools/og-image.html?hub. To remake them, run from the repo folder:
+     msedge --headless --hide-scrollbars --window-size=1200,630 --virtual-time-budget=6000 --screenshot=og-image.png http://localhost:8000/tools/og-image.html
+     (Edge is at "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"; the hub's goes to C:\SleepyScytheStudios\og-image.png.) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,600..800&family=Figtree:wght@500;600&display=block">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #14181c; color: #e7ebee; font-family: "Figtree", system-ui, sans-serif; }
+  canvas, .shade { position: absolute; inset: 0; width: 1200px; height: 630px; }
+  .shade { background: radial-gradient(ellipse at 30% 50%, rgba(20, 24, 28, 0.92) 0%, rgba(20, 24, 28, 0.7) 45%, rgba(20, 24, 28, 0.2) 80%); }
+  .card { position: absolute; left: 88px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; max-width: 760px; }
+  .row { display: flex; align-items: center; gap: 22px; }
+  .mark { width: 92px; height: 92px; flex: none; }
+  h1 { font: 800 112px/0.95 "Bricolage Grotesque", system-ui, sans-serif; letter-spacing: -0.035em; margin: 0; }
+  p { font-size: 38px; line-height: 1.25; margin: 30px 0 0; color: #e7ebee; max-width: 700px; }
+  .accent { color: #56c4b4; }
+  .url { position: absolute; left: 88px; bottom: 54px; font-size: 26px; font-weight: 600; color: #8b97a3; letter-spacing: 0.01em; }
+  .url b { color: #e7ebee; font-weight: 600; }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="shade"></div>
+<div class="card" id="card"></div>
+<div class="url" id="url"></div>
+<script src="../js/background.js"></script>
+<script>
+  var hub = location.search.indexOf('hub') >= 0, card = document.getElementById('card'), url = document.getElementById('url');
+  var sketchMark = '<svg class="mark" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1b2025"/><path d="M14 44c8-14 14-22 20-20s-2 14 4 16 8-8 12-16" fill="none" stroke="#56c4b4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var hubMark = '<svg class="mark" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1b2025"/><path d="M27.74 16.04A19 19 0 1 0 47.42 39.66A16 16 0 0 1 27.74 16.04Z" fill="#56c4b4"/><circle cx="47" cy="44" r="3" fill="#d9a21b"/></svg>';
+  if (hub) {
+    card.innerHTML = '<div class="row">' + hubMark + '<h1 style="font-size:84px">SleepyScytheStudios</h1></div><p>Small, handmade web apps <span class="accent">for making things.</span></p>';
+    url.innerHTML = '<b>sleepyscythe.com</b>';
+  } else {
+    card.innerHTML = '<div class="row">' + sketchMark + '<h1>Sketchroom</h1></div><p>Sketch, paint and make pixel art <span class="accent">right in your browser.</span></p>';
+    url.innerHTML = '<b>sketchroom.sleepyscythe.com</b> &nbsp;·&nbsp; free, by SleepyScytheStudios';
+  }
+  var cv = document.getElementById('bg');
+  paintBackground(cv, Object.assign({}, BG_LIBRARY, { place: 'all', amount: 85, seed: hub ? 4242 : 68199 }));
+</script>
+</body>
+</html>

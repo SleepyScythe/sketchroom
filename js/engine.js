@@ -7,6 +7,8 @@
 // Images decode asynchronously, so the first use falls back to a soft round tip and the previews redraw once it's ready.
 var tipCache = {}, tipRedraw = 0;
 function tipImage(url) {
+  // Tips are always inline pictures. A web address (from someone else's brush) would load from another site.
+  if (typeof url !== 'string' || url.indexOf('data:image/') !== 0) return null;
   var t = tipCache[url];
   if (t) return t.ready ? t.img : null;
   t = tipCache[url] = { img: new Image(), ready: false };

@@ -9,6 +9,15 @@
 <meta property="og:title" content="Sketchroom">
 <meta property="og:description" content="A drawing app in your browser, with pressure-aware brushes, a brush editor, layers and text.">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Sketchroom">
+<meta property="og:url" content="https://sketchroom.sleepyscythe.com/">
+<!-- The picture shown when the link is shared. Made with tools/og-image.html. -->
+<meta property="og:image" content="https://sketchroom.sleepyscythe.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Sketchroom: sketch, paint and make pixel art right in your browser">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://sketchroom.sleepyscythe.com/">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -17,7 +26,7 @@
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,600..800&family=Figtree:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=22">
+<link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
 <div class="home" id="home" hidden>
@@ -25,7 +34,7 @@
   <div class="libshade" id="libShade" hidden></div>
   <header class="top">
     <div class="brand">
-      <a class="hublink" href="https://sleepyscythe.com/" title="Back to SleepyScythe Works and its other apps" aria-label="Back to SleepyScythe Works"><svg class="hubmark" viewBox="0 0 64 64" aria-hidden="true"><path d="M27.74 16.04A19 19 0 1 0 47.42 39.66A16 16 0 0 1 27.74 16.04Z"/><circle cx="47" cy="44" r="4" class="hubdot"/></svg><span class="hubname">SleepyScythe Works</span></a>
+      <a class="hublink" href="https://sleepyscythe.com/" title="Back to SleepyScytheStudios and its other apps" aria-label="Back to SleepyScytheStudios"><svg class="hubmark" viewBox="0 0 64 64" aria-hidden="true"><path d="M27.74 16.04A19 19 0 1 0 47.42 39.66A16 16 0 0 1 27.74 16.04Z"/><circle cx="47" cy="44" r="4" class="hubdot"/></svg><span class="hubname">SleepyScytheStudios</span></a>
       <span class="hubsep" aria-hidden="true">›</span>
       <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M10 46c9-15 16-24 23-22s-2 15 5 17 9-9 16-18"/></svg><span class="logo">Sketchroom</span>
     </div>
@@ -161,6 +170,11 @@
       <div class="pbox" id="fOutBox" hidden>
         <h3>Sent requests</h3>
         <div class="people" id="fOut"></div>
+      </div>
+      <div class="pbox" id="fBlockedBox" hidden>
+        <h3>Blocked</h3>
+        <div class="people" id="fBlocked"></div>
+        <p class="hint">People you blocked can’t send you friend requests or see your profile. They aren’t told.</p>
       </div>
     </section>
     <section class="library" id="homeFriend" hidden>
@@ -310,6 +324,7 @@
 <dialog class="dlg" id="dlgContact" aria-labelledby="dlgContactTitle">
   <form id="formContact">
     <h2 id="dlgContactTitle">Contact the owner</h2>
+    <p class="hint" id="ctAbout" hidden></p>
     <label class="field">About
       <select id="ctTopic">
         <option value="report">Report content or copyright</option>
@@ -606,30 +621,30 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=22"></script>
-<script src="js/core.js?v=22"></script>
-<script src="js/config.js?v=22"></script>
-<script src="js/engine.js?v=22"></script>
-<script src="js/layers.js?v=22"></script>
-<script src="js/brushes.js?v=22"></script>
-<script src="js/importbrush.js?v=22"></script>
-<script src="js/storage.js?v=22"></script>
-<script src="js/text.js?v=22"></script>
-<script src="js/canvas.js?v=22"></script>
-<script src="js/color.js?v=22"></script>
-<script src="js/tools.js?v=22"></script>
-<script src="js/select.js?v=22"></script>
-<script src="js/pixel.js?v=22"></script>
-<script src="js/pad.js?v=22"></script>
-<script src="js/files.js?v=22"></script>
-<script src="js/document.js?v=22"></script>
-<script src="js/live.js?v=22"></script>
-<script src="js/background.js?v=22"></script>
-<script src="js/library.js?v=22"></script>
-<script src="js/profile.js?v=22"></script>
-<script src="js/friends.js?v=22"></script>
-<script src="js/news.js?v=22"></script>
-<script src="js/landing.js?v=22"></script>
-<script src="js/app.js?v=22"></script>
+<script src="js/firebase-config.js?v=23"></script>
+<script src="js/core.js?v=23"></script>
+<script src="js/config.js?v=23"></script>
+<script src="js/engine.js?v=23"></script>
+<script src="js/layers.js?v=23"></script>
+<script src="js/brushes.js?v=23"></script>
+<script src="js/importbrush.js?v=23"></script>
+<script src="js/storage.js?v=23"></script>
+<script src="js/text.js?v=23"></script>
+<script src="js/canvas.js?v=23"></script>
+<script src="js/color.js?v=23"></script>
+<script src="js/tools.js?v=23"></script>
+<script src="js/select.js?v=23"></script>
+<script src="js/pixel.js?v=23"></script>
+<script src="js/pad.js?v=23"></script>
+<script src="js/files.js?v=23"></script>
+<script src="js/document.js?v=23"></script>
+<script src="js/live.js?v=23"></script>
+<script src="js/background.js?v=23"></script>
+<script src="js/library.js?v=23"></script>
+<script src="js/profile.js?v=23"></script>
+<script src="js/friends.js?v=23"></script>
+<script src="js/news.js?v=23"></script>
+<script src="js/landing.js?v=23"></script>
+<script src="js/app.js?v=23"></script>
 </body>
 </html>

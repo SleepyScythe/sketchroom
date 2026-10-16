@@ -3,19 +3,22 @@ rules_version = '2';
 // Sketchroom Cloud Storage rules. Paste into Firebase console > Storage > Rules, then Publish.
 // Each library image's layers are PNGs at users/{uid}/images/{imageId}/{layerId}.png.
 // They can be read by that user, by their friends when the image's library item is not private, and by the friends the
-// image is shared with for drawing together (shares/{uid}_{imageId} in Firestore), who can also write them.
+// image is shared with for drawing together (shares/{uid}_{imageId} in Firestore), who can also write them. Shared access
+// lasts only while they are still friends, so ending a friendship (or blocking) ends it at once (2026-10-16).
 // These checks read Firestore, which needed the one-time permission the console asked for (attached 2026-10-12).
 service firebase.storage {
   match /b/{bucket}/o {
+    function isFriendOf(uid) { return firestore.exists(/databases/(default)/documents/users/$(uid)/friends/$(request.auth.uid)); }
+    function isShareMember(uid, imageId) {
+      return firestore.get(/databases/(default)/documents/shares/$(uid + '_' + imageId)).data.members.hasAny([request.auth.uid])
+        && isFriendOf(uid);
+    }
     match /users/{uid}/images/{imageId}/{file} {
       allow read: if request.auth != null && (request.auth.uid == uid
-        || (firestore.exists(/databases/(default)/documents/users/$(uid)/friends/$(request.auth.uid))
-            && firestore.get(/databases/(default)/documents/users/$(uid)/items/$(imageId)).data.private == false)
-        || firestore.get(/databases/(default)/documents/shares/$(uid + '_' + imageId)).data.members.hasAny([request.auth.uid]));
-      allow delete: if request.auth != null && (request.auth.uid == uid
-        || firestore.get(/databases/(default)/documents/shares/$(uid + '_' + imageId)).data.members.hasAny([request.auth.uid]));
-      allow create, update: if request.auth != null && (request.auth.uid == uid
-          || firestore.get(/databases/(default)/documents/shares/$(uid + '_' + imageId)).data.members.hasAny([request.auth.uid]))
+        || (isFriendOf(uid) && firestore.get(/databases/(default)/documents/users/$(uid)/items/$(imageId)).data.private == false)
+        || isShareMember(uid, imageId));
+      allow delete: if request.auth != null && (request.auth.uid == uid || isShareMember(uid, imageId));
+      allow create, update: if request.auth != null && (request.auth.uid == uid || isShareMember(uid, imageId))
         && request.resource.size < 60 * 1024 * 1024
         && request.resource.contentType == 'image/png';
     }

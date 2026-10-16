@@ -8,8 +8,9 @@
    request is accepted (store.acceptFriendRequest). Friends see each other's profile and every library item whose
    private flag is false, including those images' layer files. The Firestore and Storage rules check all of this. */
 function isFriend(id) { return S.friends.some(function (f) { return f.uid === id; }); }
+function isBlocked(id) { return (S.blocked || []).indexOf(id) >= 0; }
 // Incoming requests still waiting for an answer.
-function pendingFriendRequests() { return S.friendIn.filter(function (r) { return !isFriend(r.from); }); }
+function pendingFriendRequests() { return S.friendIn.filter(function (r) { return !isFriend(r.from) && !isBlocked(r.from); }); }
 // Profiles of friends and of people in requests. S.people[uid] is the profile, or null when the account has none.
 var peopleLoading = {};
 function loadPeople(ids) {
@@ -31,7 +32,7 @@ function friendsChanged() {
     droppingRequests[key] = true;
     store.dropFriendRequest(r).catch(function () { delete droppingRequests[key]; });
   });
-  loadPeople(S.friends.map(function (f) { return f.uid; }).concat(S.friendIn.map(function (r) { return r.from; }), S.friendOut.map(function (r) { return r.to; })));
+  loadPeople(S.friends.map(function (f) { return f.uid; }).concat(S.friendIn.map(function (r) { return r.from; }), S.friendOut.map(function (r) { return r.to; }), S.blocked || []));
   renderAccount(); renderHome();
 }
 
@@ -39,6 +40,44 @@ function friendsChanged() {
 function smallBtn(label, primary, onClick) {
   var b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm' + (primary ? ' primary' : ''); b.textContent = label;
   b.addEventListener('click', function () { onClick(b); }); return b;
+}
+// A button that needs a second tap within 3 seconds, for things that are hard to undo.
+function confirmBtn(label, confirmLabel, onConfirm) {
+  var timer = 0;
+  return smallBtn(label, false, function (b) {
+    if (!b.classList.contains('armed')) {
+      b.classList.add('armed', 'warn'); b.textContent = confirmLabel;
+      timer = setTimeout(function () { b.classList.remove('armed', 'warn'); b.textContent = label; }, 3000); return;
+    }
+    clearTimeout(timer); b.classList.remove('armed', 'warn'); b.textContent = label; onConfirm(b);
+  });
+}
+/* ---------- blocking and reporting ----------
+   Blocking (store.blockUser) ends the friendship, drops requests between you and their place in your shared images. The
+   rules then stop them sending requests or seeing your profile. Reports go to the owner's inbox with the person's uid. */
+function blockBtn(id, after) {
+  return confirmBtn('Block', 'Tap again to block', function (b) {
+    b.disabled = true;
+    store.blockUser(id).then(function () {
+      toast(personName(id) + ' is blocked. They can’t send you requests or see your profile.'); if (after) after();
+    }, function () { b.disabled = false; toast('Could not block. Try again.'); });
+  });
+}
+function unblockBtn(id) {
+  return smallBtn('Unblock', false, function (b) {
+    b.disabled = true;
+    store.unblockUser(id).then(function () { toast(personName(id) + ' is unblocked.'); }, function () { b.disabled = false; toast('Could not unblock. Try again.'); });
+  });
+}
+function reportBtn(id) { return smallBtn('Report', false, function () { openReport(id); }); }
+// The owner can take down a profile that breaks the terms. The person keeps their library and picks a new username.
+function removeProfileBtn(id, after) {
+  return confirmBtn('Remove profile', 'Tap again to remove their profile', function (b) {
+    var p = S.people[id]; b.disabled = true;
+    store.removeProfile(id, p && p.username).then(function () {
+      S.people[id] = null; toast('Profile removed. They’ll be asked for a new username.'); if (after) after(); renderHome();
+    }, function () { b.disabled = false; toast('Could not remove the profile.'); });
+  });
 }
 // link: the name opens that person's library.
 function fillPeople(host, ids, actionsFor, link) {
@@ -71,7 +110,8 @@ function renderFriends() {
       smallBtn('Decline', false, function (b) {
         b.disabled = true;
         store.dropFriendRequest({ from: id, to: S.myId }).catch(function () { b.disabled = false; toast('Could not decline. Try again.'); });
-      })
+      }),
+      blockBtn(id)
     ];
   });
   fillPeople($('#fOut'), outs, function (id) {
@@ -83,19 +123,17 @@ function renderFriends() {
   $('#fListTitle').textContent = 'Your friends' + (ids.length ? ' (' + ids.length + ')' : '');
   $('#fEmpty').hidden = ids.length > 0;
   fillPeople($('#fList'), ids, function (id) {
-    var timer = 0;
     return [
       smallBtn('Open library', true, function () { location.hash = '#/u/' + id; }),
-      smallBtn('Remove', false, function (b) {
-        if (!b.classList.contains('armed')) {
-          b.classList.add('armed', 'warn'); b.textContent = 'Tap again to remove';
-          timer = setTimeout(function () { b.classList.remove('armed', 'warn'); b.textContent = 'Remove'; }, 3000); return;
-        }
-        clearTimeout(timer); b.disabled = true;
+      confirmBtn('Remove', 'Tap again to remove', function (b) {
+        b.disabled = true;
         store.removeFriend(id).then(function () { toast(personName(id) + ' is no longer your friend.'); }, function () { b.disabled = false; toast('Could not remove. Try again.'); });
       })
     ];
   }, true);
+  var blocked = (S.blocked || []).slice().sort(byPersonName);
+  $('#fBlockedBox').hidden = !blocked.length;
+  fillPeople($('#fBlocked'), blocked, function (id) { return [unblockBtn(id)]; });
 }
 async function addFriend(e) {
   e.preventDefault();
@@ -107,6 +145,7 @@ async function addFriend(e) {
     if (!id) msg.textContent = 'Nobody is called @' + name + '. Check the spelling.';
     else if (id === S.myId) msg.textContent = 'That is your own username.';
     else if (isFriend(id)) msg.textContent = 'You are already friends with @' + name + '.';
+    else if (isBlocked(id)) msg.textContent = 'You blocked @' + name + '. Unblock them below first.';
     else if (S.friendOut.some(function (r) { return r.to === id; })) msg.textContent = 'You already sent @' + name + ' a request.';
     else if (S.friendIn.some(function (r) { return r.from === id; })) {
       // They already asked you, so this accepts their request.
@@ -169,7 +208,17 @@ function renderFriend() {
   watchFriend();
   var r = S.friendAt, items = fv.items, name = personName(r.uid), grid = $('#ufGrid'), empty = $('#ufEmpty'), viewer = $('#ufViewer');
   $('#ufBack').lastChild.textContent = r.sub ? 'Back' : 'Friends';
-  var head = $('#ufHead'); head.innerHTML = ''; if (!r.sub) head.appendChild(profileCard(S.people[r.uid]));
+  var head = $('#ufHead'); head.innerHTML = '';
+  if (!r.sub) {
+    head.appendChild(profileCard(S.people[r.uid]));
+    if (r.uid !== S.myId) {
+      var acts = document.createElement('div'); acts.className = 'tools-row pacts';
+      var away = function () { location.hash = '#/friends'; };
+      acts.append(reportBtn(r.uid), isBlocked(r.uid) ? unblockBtn(r.uid) : blockBtn(r.uid, away));
+      if (S.canEdit && S.people[r.uid]) acts.appendChild(removeProfileBtn(r.uid));
+      head.appendChild(acts);
+    }
+  }
   grid.innerHTML = '';
   var at = r.sub ? items[r.id] : null, bad = !fv.ready || fv.error || (r.sub && (!at || (r.sub === 'd') !== (at.type === 'image')));
   if (bad) {

@@ -195,10 +195,43 @@ async function initStore() {
     b.delete(db.collection('friendRequests').doc(from + '_' + me));
     await b.commit();
   };
+  // Ending a friendship also takes them out of the images you shared with them. The rules already stop their access
+  // the moment the friendship ends, so this is tidying, done one share at a time after the main batch (each share check
+  // makes up to 6 rule lookups, and a batch may only make 20).
+  var dropFromShares = async function (other) {
+    var list = Object.keys(S.myShares || {}).map(function (k) { return S.myShares[k]; })
+      .filter(function (s) { return s && Array.isArray(s.members) && s.members.indexOf(other) >= 0; });
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i], left = s.members.filter(function (m) { return m !== other; }), ref = db.collection('shares').doc(s.id);
+      try { if (left.length) await ref.update({ members: left, at: Date.now() }); else await ref.delete(); } catch (e) { /* their access is gone anyway */ }
+    }
+  };
   store.removeFriend = async function (other) {
     var me = auth.currentUser.uid, users = db.collection('users'), b = db.batch();
     b.delete(users.doc(me).collection('friends').doc(other));
     b.delete(users.doc(other).collection('friends').doc(me));
+    await b.commit();
+    await dropFromShares(other);
+  };
+  // Blocking: users/{me}/blocked/{other} = { at }. It also ends the friendship, any requests between you, and their
+  // place in your shared images. The rules then stop them sending requests or seeing your profile.
+  store.blockUser = async function (other) {
+    var me = auth.currentUser.uid, users = db.collection('users'), b = db.batch();
+    b.set(users.doc(me).collection('blocked').doc(other), { at: Date.now() });
+    b.delete(users.doc(me).collection('friends').doc(other));
+    b.delete(users.doc(other).collection('friends').doc(me));
+    S.friendIn.concat(S.friendOut).forEach(function (r) {
+      if (r.from === other || r.to === other) b.delete(db.collection('friendRequests').doc(r.from + '_' + r.to));
+    });
+    await b.commit();
+    await dropFromShares(other);
+  };
+  store.unblockUser = async function (other) { await db.collection('users').doc(auth.currentUser.uid).collection('blocked').doc(other).delete(); };
+  // Admins only: take down a profile and free its username. The person picks a new username next time they come.
+  store.removeProfile = async function (other, username) {
+    var b = db.batch();
+    b.delete(db.collection('profiles').doc(other));
+    if (username) b.delete(db.collection('usernames').doc(username));
     await b.commit();
   };
   store.getProfile = async function (id) { var d = await db.collection('profiles').doc(id).get(); return d.exists ? d.data() : null; };
@@ -235,7 +268,7 @@ async function initStore() {
     S.myId = user ? user.uid : null;
     S.myName = user ? (user.displayName || user.email || 'You') : '';
     S.canEdit = false; S.mine = []; S.myFonts = []; S.requests = []; S.myRequests = []; S.uploadedFonts = []; S.profile = null; S.messages = [];
-    S.friends = []; S.friendIn = []; S.friendOut = []; S.people = {}; closeFriend();
+    S.friends = []; S.friendIn = []; S.friendOut = []; S.blocked = []; S.people = {}; closeFriend();
     S.myShares = {}; S.sharedIn = []; watchSharedItems();
     if (user) {
       var mine = db.collection('users').doc(user.uid);
@@ -283,6 +316,10 @@ async function initStore() {
         S.friends = snap.docs.map(function (d) { return { uid: d.id, since: (d.data() || {}).since || 0 }; });
         friendsChanged();
       }, function () { /* friends are optional */ }));
+      unsub.push(mine.collection('blocked').limit(500).onSnapshot(function (snap) {
+        S.blocked = snap.docs.map(function (d) { return d.id; });
+        friendsChanged();
+      }, function () { /* blocking is optional */ }));
       var fr = db.collection('friendRequests'), reqList = function (snap) { return snap.docs.map(function (d) { return d.data() || {}; }); };
       unsub.push(fr.where('to', '==', user.uid).limit(200).onSnapshot(function (snap) { S.friendIn = reqList(snap); friendsChanged(); }, function () { /* optional */ }));
       unsub.push(fr.where('from', '==', user.uid).limit(200).onSnapshot(function (snap) { S.friendOut = reqList(snap); friendsChanged(); }, function () { /* optional */ }));

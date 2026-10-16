@@ -25,7 +25,7 @@ service cloud.firestore {
         && d.parent is string && d.parent.size() <= 40
         && d.created is number && d.updated is number
         && (!('layers' in d) || (d.layers is list && d.layers.size() <= 100))
-        && (!('thumb' in d) || (d.thumb is string && d.thumb.size() <= 120000))
+        && (!('thumb' in d) || (d.thumb is string && d.thumb.size() <= 120000 && (d.thumb == '' || d.thumb.matches('data:image/(png|jpeg);base64,.*'))))
         && (!('w' in d) || (d.w is int && d.w >= 1 && d.w <= 4096))
         && (!('h' in d) || (d.h is int && d.h >= 1 && d.h <= 4096));
     }
@@ -69,7 +69,8 @@ service cloud.firestore {
         && request.resource.data.at is number;
     }
     // Drawing together: shares/{owner}_{imageId} = { owner, image, members, name, at }. Members are up to 5 of the owner's
-    // friends (checked one by one, since rules have no loops). Members can open that image, draw on it and save it.
+    // friends (checked one by one, since rules have no loops). Members can open that image, draw on it and save it, but
+    // only while they are still friends: ending the friendship (or blocking) ends their access at once (2026-10-16).
     function isMyFriend(m) { return exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(m)); }
     function friendsOk(ms) {
       return (ms.size() < 1 || isMyFriend(ms[0])) && (ms.size() < 2 || isMyFriend(ms[1])) && (ms.size() < 3 || isMyFriend(ms[2]))
@@ -77,8 +78,11 @@ service cloud.firestore {
     }
     function isShareMember(sid) {
       let s = get(/databases/$(database)/documents/shares/$(sid)).data;
-      return signedIn() && (s.owner == request.auth.uid || request.auth.uid in s.members);
+      return signedIn() && (s.owner == request.auth.uid
+        || (request.auth.uid in s.members && exists(/databases/$(database)/documents/users/$(s.owner)/friends/$(request.auth.uid))));
     }
+    // Someone blocked: users/{uid}/blocked/{other} = { at }, kept private to uid.
+    function hasBlocked(uid, other) { return exists(/databases/$(database)/documents/users/$(uid)/blocked/$(other)); }
     // The library: projects, folders and images. An image's layer PNGs are in Cloud Storage (see storage.rules).
     // Friends can read items whose private flag is false (their queries must ask for private == false).
     // People an image is shared with can read it and save their drawing into it (layers, thumbnail and these only).
@@ -139,7 +143,15 @@ service cloud.firestore {
         && id == request.auth.uid + '_' + request.resource.data.to
         && request.resource.data.at is number
         && exists(/databases/$(database)/documents/profiles/$(request.resource.data.to))
-        && !exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(request.resource.data.to));
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(request.resource.data.to))
+        && !hasBlocked(request.resource.data.to, request.auth.uid) && !hasBlocked(request.auth.uid, request.resource.data.to);
+    }
+    // Blocking (see friends.js): the blocked person can't send you requests or see your profile, and the block also ends
+    // the friendship and their access to anything you shared. Only you can see who you blocked.
+    match /users/{uid}/blocked/{other} {
+      allow read, delete: if isUser(uid);
+      allow create, update: if isUser(uid) && other != uid
+        && request.resource.data.keys().hasOnly(['at']) && request.resource.data.at is number;
     }
     match /users/{uid}/uploadedFonts/{id} {
       allow read, delete: if isUser(uid);
@@ -162,8 +174,10 @@ service cloud.firestore {
         && request.resource.data.at is number;
       allow delete: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
     }
-    // Profiles: readable by signed-in people, written only by their owner, and the username must be reserved for them
-    // in usernames/{name} by the same batch (getAfter sees the batch's result).
+    // Profiles: readable by signed-in people (except people the owner blocked), written only by their owner, and the
+    // username must be reserved for them in usernames/{name} by the same batch (getAfter sees the batch's result).
+    // Links must be web addresses and the picture a data URL, so nothing else can be slipped into other people's pages.
+    function validLink(l) { return l is string && l.size() <= 200 && l.matches('https?://.+'); }
     function validProfile(d) {
       return d.keys().hasOnly(['username', 'displayName', 'bio', 'pronouns', 'location', 'links', 'avatar', 'color', 'joined', 'updated'])
         && d.username is string && d.username.matches('^[a-z0-9_.]{3,20}$')
@@ -172,15 +186,22 @@ service cloud.firestore {
         && d.pronouns is string && d.pronouns.size() <= 24
         && d.location is string && d.location.size() <= 40
         && d.links is list && d.links.size() <= 3
-        && d.avatar is string && d.avatar.size() <= 80000
+        && (d.links.size() < 1 || validLink(d.links[0])) && (d.links.size() < 2 || validLink(d.links[1])) && (d.links.size() < 3 || validLink(d.links[2]))
+        && d.avatar is string && d.avatar.size() <= 80000 && (d.avatar == '' || d.avatar.matches('data:image/(png|jpeg);base64,.*'))
         && d.color is string && d.color.size() <= 7
         && d.joined is number && d.updated is number;
     }
+    // Changing your username must give the old one back in the same batch, so nobody can hoard names.
+    function releasesOldName() {
+      return resource == null || resource.data.username == request.resource.data.username
+        || !existsAfter(/databases/$(database)/documents/usernames/$(resource.data.username));
+    }
     match /profiles/{uid} {
-      allow read: if signedIn();
-      allow create, update: if isUser(uid) && validProfile(request.resource.data)
+      allow read: if signedIn() && (!hasBlocked(uid, request.auth.uid) || isAdmin());
+      allow create, update: if isUser(uid) && validProfile(request.resource.data) && releasesOldName()
         && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid;
-      allow delete: if isUser(uid);
+      // Admins can take down a profile that breaks the terms (the person then picks a new username).
+      allow delete: if isUser(uid) || isAdmin();
     }
     // usernames/{name} = { uid }. Create only (a taken name can't be overwritten), and only for the name in your own profile.
     match /usernames/{name} {
@@ -188,14 +209,16 @@ service cloud.firestore {
       allow create: if signedIn() && name.matches('^[a-z0-9_.]{3,20}$')
         && request.resource.data.keys().hasOnly(['uid']) && request.resource.data.uid == request.auth.uid
         && getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username == name;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid
         && (!existsAfter(/databases/$(database)/documents/profiles/$(request.auth.uid))
-            || getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username != name);
+            || getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username != name));
     }
     // The contact form. Any signed-in person can send; only admins can read, mark read or delete.
+    // A report about a person carries their uid in "about".
     match /messages/{id} {
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['uid', 'username', 'topic', 'text', 'contact', 'at', 'read'])
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'topic', 'text', 'contact', 'at', 'read', 'about'])
+        && (!('about' in request.resource.data) || (request.resource.data.about is string && request.resource.data.about.size() <= 128))
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.username is string && request.resource.data.username.size() <= 20
         && request.resource.data.topic in ['report', 'privacy', 'bug', 'other']

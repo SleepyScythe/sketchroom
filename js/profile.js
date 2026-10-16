@@ -146,20 +146,29 @@ async function saveProfileEdits(e) {
 }
 
 /* ---------- contact form and the owner's inbox ---------- */
-function openContact(topic) {
+// about: the uid of a person being reported (from Report on their page), sent with the message for the owner.
+var contactAbout = '';
+function openContact(topic, about) {
   if (!store.online) { toast('The contact form needs the online version of Sketchroom.'); return; }
   if (!S.myId) { store.signIn(); return; }
+  contactAbout = about || '';
+  $('#dlgContactTitle').textContent = about ? 'Report ' + personName(about) : 'Contact the owner';
+  $('#ctAbout').hidden = !about;
+  $('#ctAbout').textContent = about ? 'Say what’s wrong, for example harassment, an inappropriate picture or bio, spam, or someone pretending to be someone else. Only the site owner sees reports, and ' + personName(about) + ' isn’t told who sent it.' : '';
   $('#ctTopic').value = topic || 'bug'; $('#ctText').value = ''; $('#ctReply').value = ''; $('#ctError').textContent = '';
   $('#dlgContact').showModal(); $('#ctText').focus();
 }
+function openReport(id) { openContact('report', id); }
 async function sendContact(e) {
   e.preventDefault();
   var text = $('#ctText').value.trim();
   if (!text) { $('#ctError').textContent = 'Write a message first.'; return; }
   var btn = $('#ctSend'); btn.disabled = true;
   try {
-    await store.sendMessage({ uid: S.myId, username: S.profile ? S.profile.username : '', topic: $('#ctTopic').value, text: text.slice(0, 2000),
-      contact: $('#ctReply').value.trim().slice(0, 120), at: Date.now(), read: false });
+    var m = { uid: S.myId, username: S.profile ? S.profile.username : '', topic: $('#ctTopic').value, text: text.slice(0, 2000),
+      contact: $('#ctReply').value.trim().slice(0, 120), at: Date.now(), read: false };
+    if (contactAbout) m.about = contactAbout;
+    await store.sendMessage(m);
     $('#dlgContact').close('ok'); toast('Message sent. Thank you!');
   } catch (err) { $('#ctError').textContent = 'Could not send. Check your connection and try again.'; }
   btn.disabled = false;
@@ -178,6 +187,16 @@ function renderInbox() {
     card.append(head, body);
     if (m.contact) { var c = document.createElement('p'); c.className = 'hint'; c.textContent = 'Reply to: ' + m.contact; card.appendChild(c); }
     var row = document.createElement('div'); row.className = 'tools-row';
+    // A report about a person: open their page (profile, Remove profile) from here.
+    if (typeof m.about === 'string' && m.about) {
+      loadPeople([m.about]);
+      var ab = document.createElement('p'); ab.className = 'hint';
+      ab.textContent = 'About ' + (S.people[m.about] ? personName(m.about) : m.about in S.people ? 'a profile that is gone now' : 'someone (loading…)');
+      card.insertBefore(ab, body);
+      var who = m.about, open = document.createElement('button'); open.className = 'btn sm'; open.textContent = 'Open their page';
+      open.addEventListener('click', function () { location.hash = '#/u/' + who; });
+      row.appendChild(open);
+    }
     var rd = document.createElement('button'); rd.className = 'btn sm'; rd.textContent = m.read ? 'Mark unread' : 'Mark read';
     rd.addEventListener('click', function () { store.markMessage(m.id, !m.read).catch(function () { toast('Could not update it.'); }); });
     var del = document.createElement('button'); del.className = 'btn sm'; del.textContent = 'Delete';

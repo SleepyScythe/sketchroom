@@ -100,7 +100,7 @@ var BUILTIN_FONTS = [].concat.apply([], FONT_GROUPS.map(function (g) { return g[
 /* ---------- state ---------- */
 var S = {
   tool: 'brush', color: '#222831', brush: P({}), base: P({}), brushId: 'pen', brushName: 'Drafting Pen', dirty: false,
-  profile: null, messages: [], friends: [], friendIn: [], friendOut: [], people: {}, friendAt: null,
+  profile: null, messages: [], friends: [], friendIn: [], friendOut: [], blocked: [], people: {}, friendAt: null,
   myShares: {}, sharedIn: [], sharedItems: {}, live: null,
   eraser: P({ size: 26, hardness: 85, spacing: 6, smoothing: 20 }),
   layers: [], active: null, view: { x: 0, y: 0, s: 1 }, userZoomed: false,
