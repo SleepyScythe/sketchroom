@@ -102,7 +102,11 @@ function syncSliders(skipQuick) {
   $('#followChk').checked = !!S.brush.follow;
   $('#quickWho').textContent = quickTitle();
 }
-function drawEdit() { if (!$('#pane-edit').hidden) drawPreview($('#editPreview'), S.brush, cssVar('--fg')); }
+function drawEdit() {
+  if ($('#pane-edit').hidden) return;
+  fitCanvas($('#testPad')); fitCanvas($('#editPreview'));
+  drawPreview($('#editPreview'), S.brush, cssVar('--fg'));
+}
 
 /* ---------- brush library ---------- */
 function selectBrush(id, name, params) {

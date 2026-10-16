@@ -8,6 +8,13 @@ var $$ = function (s, r) { return Array.prototype.slice.call((r || document).que
 var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
 var uid = function () { return Math.random().toString(36).slice(2, 10); };
 var cssVar = function (n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); };
+// Gives a canvas a bitmap the size it shows at (inside any border), at the screen's pixel density, so what's drawn isn't
+// stretched and lands under the pen. Resizing clears the canvas, so it only resizes when the size changed (returns true).
+function fitCanvas(cv) {
+  var d = window.devicePixelRatio || 1, w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
+  if (!w || !h || (cv.width === w && cv.height === h)) return false;
+  cv.width = w; cv.height = h; return true;
+}
 
 
 /* ---------- icons ---------- */

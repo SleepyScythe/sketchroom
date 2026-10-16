@@ -1,7 +1,8 @@
 /* Sketchroom: "What's new", the patch notes that pop up over the library.
    It shows once per account: the version the person has seen is kept in users/{uid}/settings/news (and in this browser,
    in case saving fails). The footer's "What's new" link opens it again any time.
-   For the next update: change NEWS (a new version string, then the notes) and it shows once more for everyone.
+   Only for big updates (a lot added or fixed in one go, the owner's rule): change NEWS (a new version string, then the
+   notes) and it shows once more for everyone.
    Plain script. Shares globals with the other files in js/; load order is set in index.html. */
 'use strict';
 

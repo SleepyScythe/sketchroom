@@ -8,7 +8,10 @@ function updatePenUI() {
   host.hidden = !(S.pen.mode === 'speed' || (S.pen.mode === 'auto' && S.pen.src === 'speed'));
 }
 
-/* ---------- test pad in the brush editor ---------- */
+/* ---------- test pad in the brush editor ----------
+   It lies over the brush preview (#editPreview). Both canvases match their size on screen (fitCanvas, from drawEdit and
+   on each press). Before 2026-10-16 they were a fixed 480 × 180 shown at about 300 × 90, which squashed what was drawn
+   and put the line above the pen. */
 function initPad() {
   var cv = $('#testPad'), g = cv.getContext('2d');
   var base = document.createElement('canvas'), buf = document.createElement('canvas');
@@ -20,12 +23,12 @@ function initPad() {
     g.globalAlpha = S.brush.opacity / 100; g.drawImage(buf, 0, 0); g.globalAlpha = 1;
   }
   function add(e) {
-    var r = cv.getBoundingClientRect(), k = cv.width / r.width;
+    var r = cv.getBoundingClientRect(), kx = cv.width / r.width, ky = cv.height / r.height;
     var list = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     if (!list.length) list = [e];
     for (var i = 0; i < list.length; i++) {
       var ev = list[i], pr = samplePressure(st.pr, ev, e);
-      st.raw = { x: (ev.clientX - r.left) * k, y: (ev.clientY - r.top) * k, p: pr };
+      st.raw = { x: (ev.clientX - r.left) * kx, y: (ev.clientY - r.top) * ky, p: pr };
       st.eng.add(st.raw.x, st.raw.y, st.raw.p);
     }
     compose();
@@ -33,6 +36,8 @@ function initPad() {
   cv.addEventListener('pointerdown', function (e) {
     e.preventDefault();
     try { cv.setPointerCapture(e.pointerId); } catch (x) { /* capture is best effort */ }
+    fitCanvas(cv);
+    if (base.width !== cv.width || base.height !== cv.height) { base.width = buf.width = cv.width; base.height = buf.height = cv.height; }
     var r = cv.getBoundingClientRect(), k = cv.width / r.width;
     bsg.setTransform(1, 0, 0, 1, 0, 0); bsg.clearRect(0, 0, base.width, base.height); bsg.drawImage(cv, 0, 0);
     bg.setTransform(1, 0, 0, 1, 0, 0); bg.globalAlpha = 1; bg.clearRect(0, 0, buf.width, buf.height);
@@ -46,6 +51,7 @@ function initPad() {
   };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
   $('#padClear').addEventListener('click', function () { bsg.clearRect(0, 0, base.width, base.height); g.clearRect(0, 0, cv.width, cv.height); });
+  window.addEventListener('resize', drawEdit); // the panel can change width
   initPenTab();
 }
 
@@ -75,10 +81,9 @@ function initPenTab() {
   cv.addEventListener('pointerdown', function (e) {
     e.preventDefault();
     try { cv.setPointerCapture(e.pointerId); } catch (x) { /* capture is best effort */ }
-    // The bitmap fills the canvas inside its border, at the screen's pixel density.
-    var b = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1, w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
-    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } // first use, or the panel changed size
-    st = { id: e.pointerId, pr: newPressure(e.pointerType), r: { left: b.left + cv.clientLeft, top: b.top + cv.clientTop }, d: d, last: null };
+    fitCanvas(cv); // first use, or the panel changed size
+    var b = cv.getBoundingClientRect();
+    st = { id: e.pointerId, pr: newPressure(e.pointerType), r: { left: b.left + cv.clientLeft, top: b.top + cv.clientTop }, d: cv.width / cv.clientWidth, last: null };
     add(e);
   });
   cv.addEventListener('pointermove', function (e) { if (st && e.pointerId === st.id) add(e); });

@@ -49,7 +49,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/background.js` | The generated art behind the signed-in pages: `paintBackground(canvas, settings)`, its styles (`BG_PAINTERS`), and `BG_LIBRARY`, the settings the site uses. Self-contained, so the preview page can load it alone |
 | `tools/background-preview.html` | Not linked from the site. A pretend library with an edit panel for the background art; open http://localhost:8000/tools/background-preview.html. It starts from `BG_LIBRARY`, and the current settings are in `window.bgSettings` |
 | `js/friends.js` | Friends: requests, the friends page `#/friends`, a friend's view-only library `#/u/<uid>` and the image viewer (`showFriendImage`, which draws the visible layers onto one canvas) |
-| `js/news.js` | "What's new": the patch notes (`NEWS`) that pop up over the library once per account (`maybeShowNews`), and the footer link that reopens them. For each update: change `NEWS.version` and the notes |
+| `js/news.js` | "What's new": the patch notes (`NEWS`) that pop up over the library once per account (`maybeShowNews`), and the footer link that reopens them. Only for big updates (see "Deploying"): change `NEWS.version` and the notes |
 | `js/live.js` | Drawing together, live: layer shadows and pixel diffs (`liveTouch`, `liveFlush`, `liveDiff`), applying others' changes (`livePx`, `liveLayers`), `liveStart` / `liveStop`, `shareFor`, the Live badge. Loads after `document.js` |
 | `legal.html` | Terms of use, Privacy policy and Credits (with the Lucide/Feather license texts). Linked from the homepage footer and the profile page |
 | `LICENSE`, `THIRD_PARTY_NOTICES.md` | The owner's code is "all rights reserved". Third-party licenses (icons, fonts, Firebase) |
@@ -241,8 +241,9 @@ When testing in the built-in browser, **navigating to the same URL with a differ
 
 ## Deploying
 
-Commit and push to `main` on GitHub. For a release the owner should hear about, update the notes in `js/news.js`: a new `NEWS.version`, `NEWS.when` and the items. Every signed-in person then sees them once. There is no build, but **bump the `?v=` number** on `styles.css` and every `js/` script tag in `index.html` before each push that changes CSS or JS.
+Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` number** on `styles.css` and every `js/` script tag in `index.html` before each push that changes CSS or JS.
 - **Why:** GitHub Pages lets browsers cache files for 10 minutes (`max-age=600`), and a normal reload refetches `index.html` but reuses cached scripts. Without the bump, a visitor can get the new page with old scripts, startup throws, and the page looks dead (this happened on 2026-10-11).
+- **"What's new" popup:** only for big updates, when a lot is added or fixed in one go (the owner's rule, 2026-10-16). Single fixes and small features get no popup. For a big update, edit `js/news.js`: a new `NEWS.version`, `NEWS.when` and the items. Every signed-in person then sees them once. Old notes can be corrected without changing the version (no new popup).
 - **Pushing:** git push works from Claude's shell (credentials are cached in Git Credential Manager).
 - **Firebase SDK:** the compat SDK version is pinned in `index.html` (currently 12.19.0). Change all four script tags (app, auth, firestore, storage) together.
 
