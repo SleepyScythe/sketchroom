@@ -14,4 +14,4 @@ var FIREBASE_CONFIG = {
 };
 // App Check: the reCAPTCHA Enterprise site key registered for the web app in Firebase console > App Check. Public, like
 // the config above. Empty turns App Check off. See "App Check" in CLAUDE.md before enforcing it.
-var APP_CHECK_KEY = '';
+var APP_CHECK_KEY = '6LedufItAAAAAAH_m_v36I-SWirnHQ8yTBlCpIuT';
