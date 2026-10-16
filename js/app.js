@@ -6,7 +6,7 @@
 // Saving needs an account when Firebase is on. The popup opens from the click, so iPad Safari allows it.
 async function signedIn() { return !store.online || !!S.myId || await store.signIn(); }
 /* ---------- popouts ----------
-   The panel (Brushes, Edit, Color, Text), Layers and the "…" tools menu float over the canvas, so opening or closing one
+   The panel (Brushes, Edit, Color, Text, Pen), Layers and the "…" tools menu float over the canvas, so opening or closing one
    never changes the canvas size, zoom or position (the owner asked for this). The panel and Layers stay open while
    drawing, like the color pop-up. The tools menu closes once a tool is picked or anything else is tapped. */
 var panelTab = 'brushes';
@@ -14,7 +14,7 @@ function showTab(name) {
   if (name === 'layers') { openLayers(); return; }
   panelTab = name;
   $$('.tab').forEach(function (t) { t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
-  ['brushes', 'edit', 'color', 'text'].forEach(function (n) { $('#pane-' + n).hidden = n !== name; });
+  ['brushes', 'edit', 'color', 'text', 'pen'].forEach(function (n) { $('#pane-' + n).hidden = n !== name; });
   if (name === 'text') { setTool('text'); ensureFont(); }
   if (name === 'edit') { requestAnimationFrame(drawEdit); }
 }
@@ -38,6 +38,7 @@ function wirePopouts() {
   $('#layersBtn').addEventListener('click', function () { if ($('#layersPop').hidden) openLayers(); else closeLayers(); });
   $('#layersClose').addEventListener('click', closeLayers);
   $('#inputMode').addEventListener('click', function () { setInputMode(S.inputMode === 'pen' ? 'touch' : 'pen'); });
+  $$('#inputSeg [data-input]').forEach(function (b) { b.addEventListener('click', function () { setInputMode(b.dataset.input); }); });
   renderInputMode();
   $('#moreTools').addEventListener('click', function (e) { e.stopPropagation(); if ($('#toolsPop').hidden) openTools(); else closeTools(); });
   $('#toolsPop').addEventListener('click', function (e) { if (e.target.closest('[data-tool]')) closeTools(); });

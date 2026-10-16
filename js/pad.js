@@ -1,4 +1,4 @@
-/* Sketchroom: Test pad in the brush editor.
+/* Sketchroom: Test pad in the brush editor, and the Pen tab.
    Plain script. Shares globals with the other files in js/; load order is set in index.html. */
 'use strict';
 
@@ -45,12 +45,47 @@ function initPad() {
     st.eng.finish(st.raw); compose(); finishPressure(st.pr); showPressure(st.pr); st = null;
   };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  $('#padClear').addEventListener('click', function () { bsg.clearRect(0, 0, base.width, base.height); g.clearRect(0, 0, cv.width, cv.height); });
+  initPenTab();
+}
+
+/* ---------- the Pen tab ----------
+   Every drawing pen setting lives here (the owner asked for this on 2026-10-16): what draws (also on the rail), where
+   pressure comes from, the speed slider, and a pen test. The test draws a plain line whose width follows the pressure,
+   whatever the brush, and says what the pen sent. Its canvas matches its size on screen, so the line stays under the pen. */
+function initPenTab() {
   var mode = $('#penMode'); mode.value = S.pen.mode;
   mode.addEventListener('change', function () { S.pen.mode = mode.value; savePen(); updatePenUI(); });
   $('#penSpeedHost').prepend(makeSlider('How much speed changes the stroke', 0, 100, '%', function () { return S.pen.speed; }, function (v) { S.pen.speed = v; savePen(); }));
   updatePenUI();
-  $('#padClear').addEventListener('click', function () {
-    bsg.clearRect(0, 0, base.width, base.height); g.clearRect(0, 0, cv.width, cv.height);
-    $('#pressureReadout').textContent = 'Draw on the pad above to try this brush and see the pressure your pen sends.';
+  var cv = $('#penPad'), g = cv.getContext('2d'), st = null;
+  function add(e) {
+    var list = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    if (!list.length) list = [e];
+    g.lineCap = 'round'; g.strokeStyle = cssVar('--fg');
+    for (var i = 0; i < list.length; i++) {
+      var ev = list[i], p = samplePressure(st.pr, ev, e);
+      var x = (ev.clientX - st.r.left) * st.d, y = (ev.clientY - st.r.top) * st.d, last = st.last || { x: x, y: y, p: p };
+      g.lineWidth = (1 + 15 * (last.p + p) / 2) * st.d;
+      g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(x, y); g.stroke();
+      st.last = { x: x, y: y, p: p };
+    }
+    if (st.pr.type === 'pen') $('#pressureReadout').textContent = 'Pressure now: ' + st.last.p.toFixed(2);
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    try { cv.setPointerCapture(e.pointerId); } catch (x) { /* capture is best effort */ }
+    // The bitmap fills the canvas inside its border, at the screen's pixel density.
+    var b = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1, w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } // first use, or the panel changed size
+    st = { id: e.pointerId, pr: newPressure(e.pointerType), r: { left: b.left + cv.clientLeft, top: b.top + cv.clientTop }, d: d, last: null };
+    add(e);
+  });
+  cv.addEventListener('pointermove', function (e) { if (st && e.pointerId === st.id) add(e); });
+  var end = function (e) { if (!st || e.pointerId !== st.id) return; finishPressure(st.pr); showPressure(st.pr); st = null; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  $('#penPadClear').addEventListener('click', function () {
+    g.clearRect(0, 0, cv.width, cv.height);
+    $('#pressureReadout').textContent = 'Draw above with your pen. The line gets thicker with more pressure.';
   });
 }

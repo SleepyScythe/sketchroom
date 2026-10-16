@@ -40,7 +40,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/tools.js` | The tool strip over the canvas (`updateQuick()`, `quickTitle()`, `MORE_TOOLS`), fill (`fillAt`), line and shapes (`beginShape`), smudge (`beginSmudge`) |
 | `js/select.js` | Selection (rectangle or freehand) and moving the selected pixels (`S.sel`, `dropSelection()`, `deleteSelection()`) |
 | `js/pixel.js` | Pixel art: `isPixel()`, the pixel pencil and eraser (`beginPixelStroke`), pixel line and shapes (`drawPixelShape`), the pixel/tile grid (`drawGrid`), hard-edged selection masks (`hardMask`) |
-| `js/pad.js` | The test pad in the Edit tab, its pressure readout and the Pen pressure setting |
+| `js/pad.js` | The brush test pad in the Edit tab, and the Pen tab (`initPenTab`: Pen pressure, the speed slider, the pen test and its pressure readout) |
 | `js/files.js` | Saving the open image in IndexedDB (`saveDoc`, `idbGet/Put/Del`), `downloadBlob()`, PNG export (with a scale for pixel art), drawing files (`.sketchroom.json`), "Clear drawing" (`newDoc`) |
 | `js/document.js` | The open image (`S.doc`): `setDocSize()`, `applyDocMode()`, `useLayers()`, opening the quick sketch or a library image (`openSketch`, `openImage`), cloud saving (`cloudSave`, `leaveDoc`), thumbnails |
 | `js/library.js` | The homepage: cards, breadcrumbs, Create new (Image / Folder / Project / Import a file), Open / Rename / Move to… / Duplicate / Delete, the quick sketch banner, and the page addresses (`route()`) |
@@ -157,7 +157,8 @@ It was first built in Claude and published as a private artifact (https://claude
 - Brush settings live in one object (keys in `BASE` and `SCHEMA` in `config.js`). Saved brushes are `{ name, params, at }`, plus `by` (the admin's uid) in the free library, and each carries `where` (`'library'` or `'mine'`) in the app.
 - A stroke: `Engine` stamps a pre-rendered tip along the path at `spacing`. Brushes draw into the separate `buffer` canvas shown above the active layer at the brush's opacity, then composite onto the layer when the pen lifts. The eraser draws straight onto the layer with `destination-out`. `Engine.stamp()` spreads alpha across overlapping stamps (`this.norm`), so Flow and pen pressure show.
 - Undo: each stroke stores before/after crops of its bounding box, and layer operations store closures. History is capped at 80 entries and resets when another image opens. Undo and redo of a stroke only put back the pixels that stroke changed (`restoreChanged`), so a friend's nearby changes survive while drawing together.
-- **Pen / Finger switch** (bottom of the rail, `S.inputMode`, localStorage `sketchroom.input`, the owner asked for it on 2026-10-12):
+- **The Pen tab** (the panel's fifth tab, `#pane-pen`, `initPenTab()` in `pad.js`, added 2026-10-16): **every drawing pen setting goes here** (the owner's rule). It holds what draws (the same Pen / Finger choice as the rail button), Pen pressure, the speed slider, and "Try your pen": a plain line whose width follows the pressure, whatever the brush, with the pressure readout. Per-brush settings like "Pen pressure changes size" stay in the brush editor (Edit tab), since each brush has its own.
+- **Pen / Finger switch** (bottom of the rail and in the Pen tab, `S.inputMode`, localStorage `sketchroom.input`, the owner asked for it on 2026-10-12):
   - **Pen:** pens and the mouse draw, and a finger moves the canvas (one finger pans, two pinch-zoom).
   - **Finger:** fingers, pens and the mouse all draw. Two fingers still pinch-zoom.
   - **Not set yet:** the first pen stroke switches it to Pen, with a toast.
@@ -172,7 +173,7 @@ It was first built in Claude and published as a private artifact (https://claude
     - pointer if it changed at all (a real sensor never sends the exact same value for a whole stroke)
     - otherwise force if that changed
     - otherwise speed
-  - **Edit tab "Pen pressure":** sets `S.pen.mode`: Automatic (`auto`, uses `src`), From the pen (`pen`), From drawing speed (`speed`) or Off (`off`).
+  - **Pen tab "Pen pressure":** sets `S.pen.mode`: Automatic (`auto`, uses `src`), From the pen (`pen`), From drawing speed (`speed`) or Off (`off`).
   - **Speed slider:** "How much speed changes the stroke" sets `S.pen.speed`, 0 to 100, default 60. 60 is the original curve, 0 is always full pressure, and 100 is 1.67× as strong (`speedEffect()`). It only shows while speed makes the pressure (`updatePenUI` in `pad.js`).
   - **Saved:** all three are saved per browser in localStorage `sketchroom.pen`.
   - **Fingers and mouse:** always draw at full pressure.
@@ -180,7 +181,7 @@ It was first built in Claude and published as a private artifact (https://claude
 - Shortcuts: B brush, E eraser, S smudge, G fill, L line, U shapes, M select, T text, I eyedropper, H or hold Space to pan, [ and ] change size, Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z redo. Esc closes the color pop-up. Esc or Enter drops a selection, and Delete clears the selected pixels.
 - **The editor layout** (redesigned 2026-10-12 at the owner's request):
   - **The rail:** Brush, Eraser, the color chip, **…** (the other tools in a menu, `MORE_TOOLS`), the tall Size and Opacity sliders (`makeVSlider`, relabeled "Strength" for smudge), Layers, and the Pen / Finger switch.
-  - **Popouts:** the top bar's Brushes button opens a floating panel with the Brushes, Edit, Color and Text tabs (`openPanel`, `showTab`). Layers opens its own popout next to the rail. They float over the canvas (`.pop`, absolutely placed in `.work`), so opening or closing them never resizes the canvas area, and the zoom stays where it was (the owner asked for this). The panel and Layers stay open while drawing.
+  - **Popouts:** the top bar's Brushes button opens a floating panel with the Brushes, Edit, Color, Text and Pen tabs (`openPanel`, `showTab`). Layers opens its own popout next to the rail. They float over the canvas (`.pop`, absolutely placed in `.work`), so opening or closing them never resizes the canvas area, and the zoom stays where it was (the owner asked for this). The panel and Layers stay open while drawing.
   - **Tool strip:** while a tool from the … menu is picked, a strip at the top of the canvas names it and holds its settings (`#qFill`, `#qShape`, `#qSelect`, `#qText`). On narrow screens it hides while the panel is open.
   - **Removed:** the four-corners Fit button. Zoom with −, 100%, +, pinch, the mouse wheel or Ctrl and +/−.
   - **Phones:** the top bar can't widen the page (`.app` has a `minmax(0, 1fr)` column) and the drawing's title shrinks first. Before that fix, the header stretched the editor wider than the screen.
@@ -287,6 +288,7 @@ There is no test suite. Check changes by serving the folder (see "Running locall
 - drawing with a few brushes, undo and redo
 - adding and deleting layers
 - the text tool and the Edit tab test pad
+- the Pen tab: the pen test line follows the pressure, and Pen / Finger matches the rail button
 - the color pop-up
 
 **With Firebase on:**

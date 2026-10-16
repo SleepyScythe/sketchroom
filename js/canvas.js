@@ -35,7 +35,7 @@ function setTool(t) {
 }
 
 /* ---------- pen or finger ----------
-   The switch at the bottom of the rail (the owner asked for it). 'pen': pens and the mouse draw, and a finger moves the
+   The switch at the bottom of the rail (the owner asked for it), also in the panel's Pen tab. 'pen': pens and the mouse draw, and a finger moves the
    canvas (one finger pans, two zoom). 'touch': fingers, pens and the mouse all draw. Saved per browser. Until it's set,
    the first pen stroke switches it to pen. */
 var INPUT_KEY = 'sketchroom.input';
@@ -53,6 +53,10 @@ function renderInputMode() {
   b.title = pen ? 'Pen mode: only the pen or mouse draws, and a finger moves the canvas. Tap for finger mode.'
     : 'Finger mode: fingers, pens and the mouse all draw. Tap for pen mode.';
   b.setAttribute('aria-label', b.title); b.setAttribute('aria-pressed', String(pen));
+  $$('#inputSeg [data-input]').forEach(function (s) { s.setAttribute('aria-pressed', String((s.dataset.input === 'pen') === pen)); });
+  var h = $('#inputHint');
+  if (h) h.textContent = pen ? 'Only the pen and mouse draw. A finger moves the canvas, and two fingers zoom.'
+    : 'Fingers, pens and the mouse all draw. Two fingers still zoom.';
 }
 
 /* ---------- pointer handling ---------- */
@@ -64,10 +68,10 @@ var pointers = new Map(), cur = null, drag = null, panState = null, pinch = null
    arrives in touch events. The owner's iPad sent 0.12 for every point (2026-10-12), which also drew every pressure brush
    thin and faint. So each pen stroke records three sources, and after each stroke the best one is remembered for this
    browser (S.pen.src): 'pointer' (pointer event pressure), 'force' (the stylus touch's force) or 'speed' (made up from
-   drawing speed: slow is heavy, fast is light). S.pen.mode, set in the Edit tab: 'auto' uses src, 'pen' always uses the
+   drawing speed: slow is heavy, fast is light). S.pen.mode, set in the Pen tab: 'auto' uses src, 'pen' always uses the
    pointer, 'speed' always simulates, 'off' is always full pressure. Fingers and the mouse always draw at full pressure. */
 var PEN_KEY = 'sketchroom.pen', FLAT = 0.002;
-// speed: how much drawing speed changes speed pressure, 0 to 100 (the Edit tab slider). 60 is the original strength.
+// speed: how much drawing speed changes speed pressure, 0 to 100 (the Pen tab slider). 60 is the original strength.
 S.pen = { mode: 'auto', src: 'pointer', speed: 60 };
 try { var savedPen = JSON.parse(localStorage.getItem(PEN_KEY)); if (savedPen) Object.assign(S.pen, savedPen); } catch (e) { /* storage unavailable */ }
 function savePen() { try { localStorage.setItem(PEN_KEY, JSON.stringify(S.pen)); } catch (e) { /* storage unavailable */ } }

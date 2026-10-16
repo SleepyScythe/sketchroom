@@ -14,7 +14,7 @@ var NEWS = {
     ['Friends', 'Add friends by their @username on the Friends page. Friends can look through each other\'s libraries. Choose Make private in the ••• menu for anything you want to keep to yourself.'],
     ['A roomier editor', 'Brush, eraser and color stay on the left with tall Size and Opacity sliders. The other tools are behind the … button, and Brushes and Layers open as floating panels that never move your zoom.'],
     ['Pen or finger', 'The switch at the bottom of the tool rail. In Pen mode, your finger moves the canvas and only the pen draws.'],
-    ['Pressure for every pen', 'If your pen has no pressure sensor, Sketchroom makes pressure from your drawing speed: slow is heavier, fast is lighter. Fine-tune it in Brushes, then Edit.'],
+    ['Pressure for every pen', 'If your pen has no pressure sensor, Sketchroom makes pressure from your drawing speed: slow is heavier, fast is lighter. Fine-tune it in Brushes, then Pen.'],
     ['Profiles', 'Pick a username and add a picture, bio and links. Other people only ever see your username, never your email.'],
     ['More brushes and fonts', 'About 50 brushes (tattoo, markers, inking, painting and more) and 90 fonts. You can also import .brush, .brushset and .abr brush files and pictures that you own.'],
     ['A fresh look', 'New art behind your library, a new homepage, and fixes so library cards look right on iPad and the editor fits phone screens.']

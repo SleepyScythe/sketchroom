@@ -338,7 +338,7 @@
       <span class="sep"></span>
       <span class="livebadge" id="liveBadge" hidden>Live</span>
       <button class="ibtn" id="shareBtn" title="Draw together with friends" aria-label="Draw together with friends" data-icon="share" hidden></button>
-      <button class="btn panelbtn" id="panelBtn" title="Brushes, brush editor, color and text" aria-controls="panelPop" aria-expanded="false"><span data-icon="brush"></span><span class="lbl">Brushes</span></button>
+      <button class="btn panelbtn" id="panelBtn" title="Brushes, brush editor, color, text and pen settings" aria-controls="panelPop" aria-expanded="false"><span data-icon="brush"></span><span class="lbl">Brushes</span></button>
       <div class="menu-wrap">
         <button class="btn" id="fileBtn" aria-haspopup="true" aria-expanded="false">File</button>
         <div class="menu" id="fileMenu" hidden>
@@ -453,13 +453,14 @@
       </div>
     </div>
 
-    <aside class="pop panelpop" id="panelPop" aria-label="Brushes, brush editor, color and text" hidden>
+    <aside class="pop panelpop" id="panelPop" aria-label="Brushes, brush editor, color, text and pen settings" hidden>
       <div class="pophead">
         <div class="tabs" role="tablist" id="tabs">
           <button class="tab" role="tab" data-tab="brushes" aria-selected="true">Brushes</button>
           <button class="tab" role="tab" data-tab="edit" aria-selected="false">Edit</button>
           <button class="tab" role="tab" data-tab="color" aria-selected="false">Color</button>
           <button class="tab" role="tab" data-tab="text" aria-selected="false">Text</button>
+          <button class="tab" role="tab" data-tab="pen" aria-selected="false">Pen</button>
         </div>
         <button class="ibtn sm" id="panelClose" title="Close (Esc)" aria-label="Close the panel" data-icon="x"></button>
       </div>
@@ -488,16 +489,7 @@
           <canvas id="editPreview" width="480" height="180" aria-label="Brush preview stroke"></canvas>
           <canvas id="testPad" width="480" height="180" aria-label="Test pad. Draw here to try the brush"></canvas>
         </div>
-        <div class="padbar"><span class="hint" id="pressureReadout">Draw on the pad above to try this brush and see the pressure your pen sends.</span><button class="btn" id="padClear">Clear pad</button></div>
-        <label class="field">Pen pressure
-          <select id="penMode">
-            <option value="auto">Automatic (works out what your pen can do)</option>
-            <option value="pen">From the pen</option>
-            <option value="speed">From drawing speed (for pens without pressure)</option>
-            <option value="off">Off (always full pressure)</option>
-          </select>
-        </label>
-        <div id="penSpeedHost" hidden><p class="hint">Slow strokes come out heavier and fast ones lighter. 0% turns it off.</p></div>
+        <div class="padbar"><span class="hint">Draw on the pad above to try this brush. Pen pressure settings are in the Pen tab.</span><button class="btn" id="padClear">Clear pad</button></div>
         <div id="editSliders" style="display:flex;flex-direction:column;gap:10px"></div>
         <div>
           <h3 style="margin-bottom:6px">Tip shape</h3>
@@ -516,6 +508,32 @@
           <button class="btn" id="suggestBrush" hidden>Suggest for free library</button>
         </div>
         <p class="hint" id="editHint"></p>
+      </div>
+
+      <div class="pane" id="pane-pen" hidden>
+        <p class="hint">Settings for drawing with a stylus. They're kept in this browser, so set them on each device.</p>
+        <div>
+          <h3 style="margin-bottom:6px">What draws</h3>
+          <div class="seg" id="inputSeg" role="group" aria-label="What draws">
+            <button data-input="pen" aria-pressed="false">Pen</button>
+            <button data-input="touch" aria-pressed="false">Finger</button>
+          </div>
+          <p class="hint" id="inputHint"></p>
+        </div>
+        <label class="field">Pen pressure
+          <select id="penMode">
+            <option value="auto">Automatic (works out what your pen can do)</option>
+            <option value="pen">From the pen</option>
+            <option value="speed">From drawing speed (for pens without pressure)</option>
+            <option value="off">Off (always full pressure)</option>
+          </select>
+        </label>
+        <div id="penSpeedHost" hidden><p class="hint">The slower you draw, the heavier the line. 0% turns it off.</p></div>
+        <div>
+          <h3 style="margin-bottom:6px">Try your pen</h3>
+          <canvas id="penPad" aria-label="Pen test. Draw here to see the pressure your pen sends"></canvas>
+        </div>
+        <div class="padbar"><span class="hint" id="pressureReadout">Draw above with your pen. The line gets thicker with more pressure.</span><button class="btn" id="penPadClear">Clear</button></div>
       </div>
 
       <div class="pane" id="pane-color" hidden>
