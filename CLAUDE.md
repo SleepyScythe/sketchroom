@@ -303,6 +303,7 @@ Commit and push to `main` on GitHub. There is no build, but **bump the `?v=` num
 - **Next up (owner, 2026-10-11):**
   - **Usernames:** done 2026-10-12, with profiles (see "How it works").
   - **Friends list:** done 2026-10-12 (see "How it works"). Possible next steps: an activity feed of friends' new images, likes or comments, and copying a friend's image (only with their permission).
+- **One sign-in for all SleepyScytheStudios sites** (owner, 2026-10-16, "would be cool", not urgent): Firebase keeps a sign-in per site address, so sleepyscythe.com and each app's subdomain each need their own "Sign in with Google" tap (the same account, so the same data). Sharing it needs a small server piece: a Cloud Function that turns a session cookie on `.sleepyscythe.com` into a Firebase custom token for each site, deployed from Cloud Shell. Worth doing once a second app needs accounts. Until then the hub has no sign-in at all.
 - **Privacy rule:** never write a user's email into Firestore or anything other users can see. `requests.byName` uses `@username` or "A tester". `S.myName` may fall back to the email, but only for the user's own screen.
 
 ## Testing
