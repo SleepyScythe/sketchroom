@@ -57,7 +57,7 @@ It was first built in Claude and published as a private artifact (https://claude
 | `js/app.js` | Event wiring (`wire()`), tabs, keyboard shortcuts, and `init()`. Must load last |
 | `firestore.rules`, `storage.rules` | Security rules for Firestore and Cloud Storage. Not deployed automatically: paste into the Firebase console when changed |
 | `tools/serve.ps1` | Tiny static server on http://localhost:8000 for local testing (`.claude/launch.json` runs it) |
-| `favicon.svg`, `.nojekyll`, `.gitignore` | Site icon. `.nojekyll` tells GitHub Pages to serve files as they are |
+| `favicon.svg`, `.nojekyll`, `.gitignore`, `CNAME` | Site icon. `.nojekyll` tells GitHub Pages to serve files as they are. `CNAME` holds the site's address, `sketchroom.sleepyscythe.com` |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Installable app. `sw.js` is a network-first service worker, so it opens offline but never serves stale files when online. The PNG icons were drawn with System.Drawing from the favicon's curve |
 
 ## How it works
@@ -199,11 +199,16 @@ It was first built in Claude and published as a private artifact (https://claude
 
 ## Hosting and accounts
 
-- **Site:** GitHub Pages, served from the `main` branch, root folder, at https://sleepyscythe.github.io/sketchroom/ (repo https://github.com/SleepyScythe/sketchroom). Pushing to `main` publishes the site within about a minute. The repo must stay public for free Pages.
+- **Site:** GitHub Pages, served from the `main` branch, root folder, at **https://sketchroom.sleepyscythe.com** (repo https://github.com/SleepyScythe/sketchroom). The `CNAME` file sets that address. The old https://sleepyscythe.github.io/sketchroom/ redirects there. Pushing to `main` publishes the site within about a minute. The repo must stay public for free Pages.
+- **SleepyScythe Works and the domain** (set up 2026-10-16): the owner's business name is SleepyScythe Works, for Sketchroom and future sites.
+  - **Domain:** `sleepyscythe.com`, bought on Cloudflare (Registrar and DNS, in the owner's Cloudflare account), renews 2027-10-16.
+  - **DNS records:** A and AAAA for `@` point to GitHub Pages' IPs (185.199.108–111.153, 2606:50c0:8000–8003::153), and `www` and `sketchroom` are CNAMEs to `sleepyscythe.github.io`. All are **DNS only** (grey cloud): Cloudflare's proxy would stop GitHub issuing the HTTPS certificate. A TXT record `_github-pages-challenge-SleepyScythe` verifies the domain in the owner's GitHub settings (Pages > Verified domains), so nobody else can use it on GitHub.
+  - **Hub page:** https://sleepyscythe.com lists the apps. It's the repo https://github.com/SleepyScythe/SleepyScythe.github.io, kept locally at `C:\SleepyScythe Works`, previewed with the `hub` entry in `.claude/launch.json` on port 8001. Its `404.html` sends `/sketchroom` links in any capitals to sketchroom.sleepyscythe.com. New apps get a card there and their own subdomain (a CNAME record plus a `CNAME` file in their repo).
+  - **Order matters:** a custom domain on the `SleepyScythe.github.io` repo makes GitHub redirect every project site that has no domain of its own to `sleepyscythe.com/<repo>`. Give a project its own domain (with DNS, Firebase and CORS ready) first. Pushing the hub's `CNAME` first took Sketchroom down for about 5 minutes on 2026-10-16.
 - **Firebase project:** `sketchroom-abab3`, owned by the owner's Google account. Console: https://console.firebase.google.com/project/sketchroom-abab3
   - **Plan:** Blaze (pay as you go) since 2026-10-11. Monthly budget alert ("Firebase Project sketchroom-abab3" in Google Cloud > Billing > Budgets & alerts): $5, raised to $20 on 2026-10-12 at the owner's request, emailing at 50%, 90% and 100%. It only alerts, it doesn't stop spending (no spend cap is set). The billing account was on a free trial with $300 credit.
   - **Firestore:** in `nam5`. Google Analytics and Gemini are off.
-  - **Cloud Storage:** default bucket `gs://sketchroom-abab3.firebasestorage.app` in US-EAST1, a no-cost location, so the free allowance applies. Its **CORS** allows GET from `https://sleepyscythe.github.io` and `http://localhost:8000`. It was set from Google Cloud Shell:
+  - **Cloud Storage:** default bucket `gs://sketchroom-abab3.firebasestorage.app` in US-EAST1, a no-cost location, so the free allowance applies. Its **CORS** allows GET from `https://sketchroom.sleepyscythe.com` (added 2026-10-16), `https://sleepyscythe.github.io` and `http://localhost:8000`, with `maxAgeSeconds` 3600. It was set from Google Cloud Shell:
     ```
     gcloud storage buckets update gs://sketchroom-abab3.firebasestorage.app --cors-file=cors.json
     ```
@@ -230,7 +235,7 @@ It was first built in Claude and published as a private artifact (https://claude
   - **Storage reads Firestore:** the Storage rules call `firestore.exists()` / `firestore.get()` to check friendship and the item's `private` flag. That needed a one-time IAM role for the Storage service account. The owner approved it, and it was attached from the console's "Provision cross-service rules" dialog on 2026-10-12. Each friend's layer download costs a couple of Firestore reads.
   - **Drawing together:** the rules for `shares` and its ops, the members' access to the item and its layer files, and the friend check (up to 5 members, one `exists` each) were published on 2026-10-12.
   - **Order:** publish rules before pushing code that writes new fields (`validItem` uses `hasOnly`, so the old rules reject unknown fields).
-- **Authorized domains:** sign-in only works on domains listed in Authentication > Settings > Authorized domains (`localhost`, `sketchroom-abab3.firebaseapp.com`, `sketchroom-abab3.web.app`, `sleepyscythe.github.io`).
+- **Authorized domains:** sign-in only works on domains listed in Authentication > Settings > Authorized domains (`localhost`, `sketchroom-abab3.firebaseapp.com`, `sketchroom-abab3.web.app`, `sleepyscythe.github.io`, and `sketchroom.sleepyscythe.com` since 2026-10-16).
 - **Fallback:** if `FIREBASE_CONFIG` is `null`, the SDK fails to load, or the page is opened from `file://`, then `store.online` is false. The homepage then offers only the quick sketch, and brushes and fonts use `localStorage`.
 - **Home-screen app (iPad):** Safari's Share menu has Add to Home Screen. On iOS the home-screen app has its own storage, separate from Safari, so the quick sketch, Recent colors and sign-in don't carry over. Library images are in the account, so they do once signed in. Google sign-in from inside the home-screen app has not been tested. Firebase's popup flow can fail in iOS standalone mode. If it does, the fallback is to sign in from Safari, or to set `display` to `browser` in the manifest.
 
