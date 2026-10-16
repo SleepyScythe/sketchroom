@@ -17,7 +17,7 @@
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,600..800&family=Figtree:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20">
+<link rel="stylesheet" href="styles.css?v=21">
 </head>
 <body>
 <div class="home" id="home" hidden>
@@ -511,7 +511,7 @@
       </div>
 
       <div class="pane" id="pane-pen" hidden>
-        <p class="hint">Settings for drawing with a stylus. They're kept in this browser, so set them on each device.</p>
+        <p class="hint">How your pen, mouse and fingers draw. These settings are kept in this browser, so set them on each device.</p>
         <div>
           <h3 style="margin-bottom:6px">What draws</h3>
           <div class="seg" id="inputSeg" role="group" aria-label="What draws">
@@ -528,12 +528,18 @@
             <option value="off">Off (always full pressure)</option>
           </select>
         </label>
+        <label class="field">Mouse and fingers
+          <select id="mouseMode">
+            <option value="speed">Pressure from drawing speed</option>
+            <option value="off">Always full pressure</option>
+          </select>
+        </label>
         <div id="penSpeedHost" hidden><p class="hint">The slower you draw, the heavier the line. 0% turns it off.</p></div>
         <div>
           <h3 style="margin-bottom:6px">Try your pen</h3>
           <canvas id="penPad" aria-label="Pen test. Draw here to see the pressure your pen sends"></canvas>
         </div>
-        <div class="padbar"><span class="hint" id="pressureReadout">Draw above with your pen. The line gets thicker with more pressure.</span><button class="btn" id="penPadClear">Clear</button></div>
+        <div class="padbar"><span class="hint" id="pressureReadout">Draw above with your pen, mouse or finger. The line gets thicker with more pressure.</span><button class="btn" id="penPadClear">Clear</button></div>
       </div>
 
       <div class="pane" id="pane-color" hidden>
@@ -596,30 +602,30 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=20"></script>
-<script src="js/core.js?v=20"></script>
-<script src="js/config.js?v=20"></script>
-<script src="js/engine.js?v=20"></script>
-<script src="js/layers.js?v=20"></script>
-<script src="js/brushes.js?v=20"></script>
-<script src="js/importbrush.js?v=20"></script>
-<script src="js/storage.js?v=20"></script>
-<script src="js/text.js?v=20"></script>
-<script src="js/canvas.js?v=20"></script>
-<script src="js/color.js?v=20"></script>
-<script src="js/tools.js?v=20"></script>
-<script src="js/select.js?v=20"></script>
-<script src="js/pixel.js?v=20"></script>
-<script src="js/pad.js?v=20"></script>
-<script src="js/files.js?v=20"></script>
-<script src="js/document.js?v=20"></script>
-<script src="js/live.js?v=20"></script>
-<script src="js/background.js?v=20"></script>
-<script src="js/library.js?v=20"></script>
-<script src="js/profile.js?v=20"></script>
-<script src="js/friends.js?v=20"></script>
-<script src="js/news.js?v=20"></script>
-<script src="js/landing.js?v=20"></script>
-<script src="js/app.js?v=20"></script>
+<script src="js/firebase-config.js?v=21"></script>
+<script src="js/core.js?v=21"></script>
+<script src="js/config.js?v=21"></script>
+<script src="js/engine.js?v=21"></script>
+<script src="js/layers.js?v=21"></script>
+<script src="js/brushes.js?v=21"></script>
+<script src="js/importbrush.js?v=21"></script>
+<script src="js/storage.js?v=21"></script>
+<script src="js/text.js?v=21"></script>
+<script src="js/canvas.js?v=21"></script>
+<script src="js/color.js?v=21"></script>
+<script src="js/tools.js?v=21"></script>
+<script src="js/select.js?v=21"></script>
+<script src="js/pixel.js?v=21"></script>
+<script src="js/pad.js?v=21"></script>
+<script src="js/files.js?v=21"></script>
+<script src="js/document.js?v=21"></script>
+<script src="js/live.js?v=21"></script>
+<script src="js/background.js?v=21"></script>
+<script src="js/library.js?v=21"></script>
+<script src="js/profile.js?v=21"></script>
+<script src="js/friends.js?v=21"></script>
+<script src="js/news.js?v=21"></script>
+<script src="js/landing.js?v=21"></script>
+<script src="js/app.js?v=21"></script>
 </body>
 </html>

@@ -2,10 +2,11 @@
    Plain script. Shares globals with the other files in js/; load order is set in index.html. */
 'use strict';
 
-// The speed slider only matters while speed makes the pressure (chosen, or picked by Automatic for a pen without pressure).
+// The speed slider only matters while speed makes the pressure: for the pen (chosen, or picked by Automatic for a pen
+// without pressure), or for the mouse and fingers.
 function updatePenUI() {
   var host = $('#penSpeedHost'); if (!host) return;
-  host.hidden = !(S.pen.mode === 'speed' || (S.pen.mode === 'auto' && S.pen.src === 'speed'));
+  host.hidden = !(S.pen.mode === 'speed' || (S.pen.mode === 'auto' && S.pen.src === 'speed') || S.pen.mouse === 'speed');
 }
 
 /* ---------- test pad in the brush editor ----------
@@ -62,6 +63,8 @@ function initPad() {
 function initPenTab() {
   var mode = $('#penMode'); mode.value = S.pen.mode;
   mode.addEventListener('change', function () { S.pen.mode = mode.value; savePen(); updatePenUI(); });
+  var mouse = $('#mouseMode'); mouse.value = S.pen.mouse;
+  mouse.addEventListener('change', function () { S.pen.mouse = mouse.value; savePen(); updatePenUI(); });
   $('#penSpeedHost').prepend(makeSlider('How much speed changes the stroke', 0, 100, '%', function () { return S.pen.speed; }, function (v) { S.pen.speed = v; savePen(); }));
   updatePenUI();
   var cv = $('#penPad'), g = cv.getContext('2d'), st = null;
@@ -76,7 +79,7 @@ function initPenTab() {
       g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(x, y); g.stroke();
       st.last = { x: x, y: y, p: p };
     }
-    if (st.pr.type === 'pen') $('#pressureReadout').textContent = 'Pressure now: ' + st.last.p.toFixed(2);
+    $('#pressureReadout').textContent = 'Pressure now: ' + st.last.p.toFixed(2);
   }
   cv.addEventListener('pointerdown', function (e) {
     e.preventDefault();
@@ -91,6 +94,6 @@ function initPenTab() {
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
   $('#penPadClear').addEventListener('click', function () {
     g.clearRect(0, 0, cv.width, cv.height);
-    $('#pressureReadout').textContent = 'Draw above with your pen. The line gets thicker with more pressure.';
+    $('#pressureReadout').textContent = 'Draw above with your pen, mouse or finger. The line gets thicker with more pressure.';
   });
 }

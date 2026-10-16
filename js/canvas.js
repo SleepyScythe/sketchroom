@@ -69,10 +69,11 @@ var pointers = new Map(), cur = null, drag = null, panState = null, pinch = null
    thin and faint. So each pen stroke records three sources, and after each stroke the best one is remembered for this
    browser (S.pen.src): 'pointer' (pointer event pressure), 'force' (the stylus touch's force) or 'speed' (made up from
    drawing speed: slow is heavy, fast is light). S.pen.mode, set in the Pen tab: 'auto' uses src, 'pen' always uses the
-   pointer, 'speed' always simulates, 'off' is always full pressure. Fingers and the mouse always draw at full pressure. */
+   pointer, 'speed' always simulates, 'off' is always full pressure. S.pen.mouse is for the mouse and fingers: 'speed'
+   (pressure from drawing speed, the default since 2026-10-16, when the owner expected it on the PC) or 'off' (full). */
 var PEN_KEY = 'sketchroom.pen', FLAT = 0.002;
 // speed: how much drawing speed changes speed pressure, 0 to 100 (the Pen tab slider). 60 is the original strength.
-S.pen = { mode: 'auto', src: 'pointer', speed: 60 };
+S.pen = { mode: 'auto', src: 'pointer', speed: 60, mouse: 'speed' };
 try { var savedPen = JSON.parse(localStorage.getItem(PEN_KEY)); if (savedPen) Object.assign(S.pen, savedPen); } catch (e) { /* storage unavailable */ }
 function savePen() { try { localStorage.setItem(PEN_KEY, JSON.stringify(S.pen)); } catch (e) { /* storage unavailable */ } }
 // The latest force of a stylus touch (Safari only). Touch events arrive alongside pointer events, so this lags by a frame at most.
@@ -102,23 +103,32 @@ function newPressure(type) {
   return { type: type, n: 0, fn: 0, lo: 1, hi: 0, plo: 1, phi: 0, flo: 1, fhi: 0, plast: 0.5, v: v, sp: speedPressure(v), prev: null };
 }
 function samplePressure(st, ev, parent) {
-  if (st.type !== 'pen') return 1;
-  var p = ev.pressure;
-  if (!(p > 0)) p = parent && parent.pressure;
-  if (!(p > 0)) p = st.plast;
-  st.plast = p; st.n++; if (p < st.plo) st.plo = p; if (p > st.phi) st.phi = p;
-  var now = performance.now(), f = now - stylusForce.t < 120 ? stylusForce.f : 0;
-  if (f > 0) { st.fn++; if (f < st.flo) st.flo = f; if (f > st.fhi) st.fhi = f; }
+  var pen = st.type === 'pen', now = performance.now(), p = 1, f = 0;
+  if (!pen && S.pen.mouse !== 'speed') return 1;
+  if (pen) {
+    p = ev.pressure;
+    if (!(p > 0)) p = parent && parent.pressure;
+    if (!(p > 0)) p = st.plast;
+    st.plast = p; st.n++; if (p < st.plo) st.plo = p; if (p > st.phi) st.phi = p;
+    f = now - stylusForce.t < 120 ? stylusForce.f : 0;
+    if (f > 0) { st.fn++; if (f < st.flo) st.flo = f; if (f > st.fhi) st.fhi = f; }
+  }
   // Speed: distance over time, smoothed by elapsed time (not per event), so it's the same at any event rate.
   // Events with the same timestamp (some coalesced events) add their distance to the next one that moves the clock.
-  var t = ev.timeStamp || now, pv = st.prev;
+  // iPad Safari's coalesced events (iOS 18.2 on) can carry timestamps that don't match the pointerdown's, so a timestamp
+  // more than a second from now is replaced by now, and one that runs backwards restarts the clock. Before this
+  // (2026-10-16) a backwards timestamp stopped the speed updating for the rest of the stroke, the likely reason speed
+  // changed nothing on the owner's iPad.
+  var t = ev.timeStamp, pv = st.prev;
+  if (!(t > 0) || Math.abs(now - t) > 1000) t = now;
   if (!pv) st.prev = { x: ev.clientX, y: ev.clientY, t: t, d: 0 };
   else {
     pv.d += Math.hypot(ev.clientX - pv.x, ev.clientY - pv.y); pv.x = ev.clientX; pv.y = ev.clientY;
     var dt = t - pv.t;
     if (dt > 0) { st.v += (pv.d / dt - st.v) * (1 - Math.exp(-dt / SPEED_TAU)); pv.d = 0; pv.t = t; st.sp = speedPressure(st.v); }
+    else if (dt < 0) { pv.t = t; pv.d = 0; }
   }
-  var mode = S.pen.mode, src = mode === 'auto' ? S.pen.src : mode === 'pen' ? 'pointer' : mode;
+  var mode = S.pen.mode, src = !pen ? 'speed' : mode === 'auto' ? S.pen.src : mode === 'pen' ? 'pointer' : mode;
   var used = src === 'off' ? 1 : src === 'speed' ? st.sp : src === 'force' && f > 0 ? f : p;
   if (used < st.lo) st.lo = used; if (used > st.hi) st.hi = used;
   return used;
@@ -131,13 +141,17 @@ function finishPressure(st) {
 }
 function showPressure(st) {
   var el = $('#pressureReadout'); if (!el) return;
-  if (st.type !== 'pen') { el.textContent = 'Fingers and the mouse draw at full pressure. Use your pen to test pressure.'; return; }
   var range = function (a, b) { return a.toFixed(2) + ' to ' + b.toFixed(2); }, mode = S.pen.mode;
+  if (st.type !== 'pen') {
+    el.textContent = S.pen.mouse === 'speed' ? 'Mouse and finger pressure comes from your drawing speed (slow is heavier, fast lighter): ' + range(st.lo, st.hi) + ' that stroke.'
+      : 'The mouse and fingers draw at full pressure. Change that under "Mouse and fingers" above.';
+    return;
+  }
   var sent = 'Your pen sent ' + range(st.plo, st.phi) + (st.fn ? ' (touch force ' + range(st.flo, st.fhi) + ')' : '') + '. ';
   if (mode === 'off') el.textContent = sent + 'Pressure is off, so every stroke is at full pressure.';
   else if (mode === 'speed') el.textContent = sent + 'Pressure comes from your drawing speed: ' + range(st.lo, st.hi) + '.';
   else if (mode === 'pen') el.textContent = sent + (st.phi - st.plo < FLAT ? 'That is flat, so this pen may not sense pressure. Try Automatic.' : 'Using it as is.');
-  else if (S.pen.src === 'speed') el.textContent = sent + 'That never changes, so your pen probably has no pressure sensor. Sketchroom now makes pressure from your drawing speed: slow strokes are heavier, fast ones lighter.';
+  else if (S.pen.src === 'speed') el.textContent = sent + 'That never changes, so your pen probably has no pressure sensor. Sketchroom makes pressure from your drawing speed instead (slow is heavier, fast lighter): ' + range(st.lo, st.hi) + ' that stroke.';
   else if (S.pen.src === 'force') el.textContent = sent + 'The pen\'s touch force changes, so Sketchroom uses that.';
   else el.textContent = 'Pen pressure that stroke: ' + range(st.plo, st.phi) + '.';
 }
