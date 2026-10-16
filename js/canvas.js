@@ -81,10 +81,21 @@ function trackStylus(e) {
 }
 document.addEventListener('touchstart', trackStylus, { passive: true, capture: true });
 document.addEventListener('touchmove', trackStylus, { passive: true, capture: true });
-// One per stroke. lo/hi: the pressure used; plo/phi and flo/fhi: what the pointer and the touch force sent.
+/* Speed pressure. The pen's screen speed (pixels per millisecond) is smoothed over about SPEED_TAU ms, so the line swells
+   and thins gradually instead of jumping, then mapped on a log-like scale: each time you halve your speed the line gets
+   about the same step heavier, all the way down to holding still (full weight), and SPEED_FAST is the lightest.
+   Until 2026-10-16 every speed under about 0.2 px/ms was full weight, so slowing down jumped straight to one size. */
+var SPEED_SLOW = 0.04, SPEED_FAST = 4, SPEED_TAU = 90;
 function speedEffect() { return clamp(Number(S.pen.speed), 0, 100) / 60 || 0; }
+function speedPressure(v) {
+  var t = clamp(Math.log(1 + Math.max(0, v) / SPEED_SLOW) / Math.log(1 + SPEED_FAST / SPEED_SLOW), 0, 1);
+  return clamp(1 - speedEffect() * 0.85 * t, 0.05, 1);
+}
+// One per stroke. lo/hi: the pressure used; plo/phi and flo/fhi: what the pointer and the touch force sent.
+// v starts at a medium speed, so strokes start a little light and settle to how fast the pen really moves.
 function newPressure(type) {
-  return { type: type, n: 0, fn: 0, lo: 1, hi: 0, plo: 1, phi: 0, flo: 1, fhi: 0, plast: 0.5, sp: clamp(1 - speedEffect() * 0.5, 0.05, 1), prev: null };
+  var v = 0.6;
+  return { type: type, n: 0, fn: 0, lo: 1, hi: 0, plo: 1, phi: 0, flo: 1, fhi: 0, plast: 0.5, v: v, sp: speedPressure(v), prev: null };
 }
 function samplePressure(st, ev, parent) {
   if (st.type !== 'pen') return 1;
@@ -94,13 +105,15 @@ function samplePressure(st, ev, parent) {
   st.plast = p; st.n++; if (p < st.plo) st.plo = p; if (p > st.phi) st.phi = p;
   var now = performance.now(), f = now - stylusForce.t < 120 ? stylusForce.f : 0;
   if (f > 0) { st.fn++; if (f < st.flo) st.flo = f; if (f > st.fhi) st.fhi = f; }
-  // Speed in screen pixels per millisecond, eased so the line swells and thins smoothly. Strokes start light.
-  var t = ev.timeStamp || now;
-  if (st.prev) {
-    var v = Math.hypot(ev.clientX - st.prev.x, ev.clientY - st.prev.y) / Math.max(1, t - st.prev.t);
-    st.sp += (clamp(1 - speedEffect() * (1 - clamp(1.1 - v * 0.45, 0.15, 1)), 0.05, 1) - st.sp) * 0.25;
+  // Speed: distance over time, smoothed by elapsed time (not per event), so it's the same at any event rate.
+  // Events with the same timestamp (some coalesced events) add their distance to the next one that moves the clock.
+  var t = ev.timeStamp || now, pv = st.prev;
+  if (!pv) st.prev = { x: ev.clientX, y: ev.clientY, t: t, d: 0 };
+  else {
+    pv.d += Math.hypot(ev.clientX - pv.x, ev.clientY - pv.y); pv.x = ev.clientX; pv.y = ev.clientY;
+    var dt = t - pv.t;
+    if (dt > 0) { st.v += (pv.d / dt - st.v) * (1 - Math.exp(-dt / SPEED_TAU)); pv.d = 0; pv.t = t; st.sp = speedPressure(st.v); }
   }
-  st.prev = { x: ev.clientX, y: ev.clientY, t: t };
   var mode = S.pen.mode, src = mode === 'auto' ? S.pen.src : mode === 'pen' ? 'pointer' : mode;
   var used = src === 'off' ? 1 : src === 'speed' ? st.sp : src === 'force' && f > 0 ? f : p;
   if (used < st.lo) st.lo = used; if (used > st.hi) st.hi = used;

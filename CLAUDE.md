@@ -164,7 +164,10 @@ It was first built in Claude and published as a private artifact (https://claude
 - **Pen pressure** (`canvas.js`): each pen stroke (brush, eraser, smudge and the test pad) uses `newPressure()` / `samplePressure()` / `finishPressure()`. Each sample records three sources:
   - `'pointer'`: the pointer event's pressure.
   - `'force'`: Safari's stylus `Touch.force`, from touch events tracked by `trackStylus`.
-  - `'speed'`: made-up pressure from screen speed, eased. Slow is heavy and fast is light, and strokes start light.
+  - `'speed'`: made-up pressure from screen speed (`speedPressure()`). Slow is heavy and fast is light, and strokes start a little light.
+    - **Smoothing:** the speed is averaged over about 90 ms of time (`SPEED_TAU`), not per event, so it's the same at any event rate and the line swells and thins gradually.
+    - **Scale:** log-like from holding still (full weight) to 4 px/ms (`SPEED_FAST`, lightest). Each halving of speed adds about the same weight, so slower always means heavier.
+    - **Changed 2026-10-16** at the owner's request: before, every speed under about 0.2 px/ms was full weight, so slowing down jumped straight to one size. Normal-speed strokes (around 0.5 to 1 px/ms) now come out a bit lighter than before.
   - **Choosing a source:** after each pen stroke the working source is stored in `S.pen.src`:
     - pointer if it changed at all (a real sensor never sends the exact same value for a whole stroke)
     - otherwise force if that changed
