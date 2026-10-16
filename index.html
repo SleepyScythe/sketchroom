@@ -17,14 +17,18 @@
 <meta name="apple-mobile-web-app-title" content="Sketchroom">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,600..800&family=Figtree:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=21">
+<link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
 <div class="home" id="home" hidden>
   <canvas class="libbg" id="libBg" aria-hidden="true" hidden></canvas>
   <div class="libshade" id="libShade" hidden></div>
   <header class="top">
-    <div class="brand"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M10 46c9-15 16-24 23-22s-2 15 5 17 9-9 16-18"/></svg><span class="logo">Sketchroom</span></div>
+    <div class="brand">
+      <a class="hublink" href="https://sleepyscythe.com/" title="Back to SleepyScythe Works and its other apps" aria-label="Back to SleepyScythe Works"><svg class="hubmark" viewBox="0 0 64 64" aria-hidden="true"><path d="M27.74 16.04A19 19 0 1 0 47.42 39.66A16 16 0 0 1 27.74 16.04Z"/><circle cx="47" cy="44" r="4" class="hubdot"/></svg><span class="hubname">SleepyScythe Works</span></a>
+      <span class="hubsep" aria-hidden="true">›</span>
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M10 46c9-15 16-24 23-22s-2 15 5 17 9-9 16-18"/></svg><span class="logo">Sketchroom</span>
+    </div>
     <div class="top-actions" id="homeActions"></div>
   </header>
   <main class="homebody">
@@ -602,30 +606,30 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
 <!-- ?v= forces browsers to fetch the new files after a deploy. Bump it every time you push (see CLAUDE.md "Deploying"). -->
-<script src="js/firebase-config.js?v=21"></script>
-<script src="js/core.js?v=21"></script>
-<script src="js/config.js?v=21"></script>
-<script src="js/engine.js?v=21"></script>
-<script src="js/layers.js?v=21"></script>
-<script src="js/brushes.js?v=21"></script>
-<script src="js/importbrush.js?v=21"></script>
-<script src="js/storage.js?v=21"></script>
-<script src="js/text.js?v=21"></script>
-<script src="js/canvas.js?v=21"></script>
-<script src="js/color.js?v=21"></script>
-<script src="js/tools.js?v=21"></script>
-<script src="js/select.js?v=21"></script>
-<script src="js/pixel.js?v=21"></script>
-<script src="js/pad.js?v=21"></script>
-<script src="js/files.js?v=21"></script>
-<script src="js/document.js?v=21"></script>
-<script src="js/live.js?v=21"></script>
-<script src="js/background.js?v=21"></script>
-<script src="js/library.js?v=21"></script>
-<script src="js/profile.js?v=21"></script>
-<script src="js/friends.js?v=21"></script>
-<script src="js/news.js?v=21"></script>
-<script src="js/landing.js?v=21"></script>
-<script src="js/app.js?v=21"></script>
+<script src="js/firebase-config.js?v=22"></script>
+<script src="js/core.js?v=22"></script>
+<script src="js/config.js?v=22"></script>
+<script src="js/engine.js?v=22"></script>
+<script src="js/layers.js?v=22"></script>
+<script src="js/brushes.js?v=22"></script>
+<script src="js/importbrush.js?v=22"></script>
+<script src="js/storage.js?v=22"></script>
+<script src="js/text.js?v=22"></script>
+<script src="js/canvas.js?v=22"></script>
+<script src="js/color.js?v=22"></script>
+<script src="js/tools.js?v=22"></script>
+<script src="js/select.js?v=22"></script>
+<script src="js/pixel.js?v=22"></script>
+<script src="js/pad.js?v=22"></script>
+<script src="js/files.js?v=22"></script>
+<script src="js/document.js?v=22"></script>
+<script src="js/live.js?v=22"></script>
+<script src="js/background.js?v=22"></script>
+<script src="js/library.js?v=22"></script>
+<script src="js/profile.js?v=22"></script>
+<script src="js/friends.js?v=22"></script>
+<script src="js/news.js?v=22"></script>
+<script src="js/landing.js?v=22"></script>
+<script src="js/app.js?v=22"></script>
 </body>
 </html>
