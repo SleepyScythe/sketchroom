@@ -12,3 +12,6 @@ var FIREBASE_CONFIG = {
   messagingSenderId: '852279209959',
   appId: '1:852279209959:web:eb65dfd20afe1e0f7d9742'
 };
+// App Check: the reCAPTCHA Enterprise site key registered for the web app in Firebase console > App Check. Public, like
+// the config above. Empty turns App Check off. See "App Check" in CLAUDE.md before enforcing it.
+var APP_CHECK_KEY = '';

@@ -78,7 +78,8 @@
   <h3>Where it is stored</h3>
   <p>In Google Firebase (Firestore database and Cloud Storage) in the United States, protected by security rules that only let you reach your own private data, your friends reach the library items you have not made private, and the friends you invite reach the images you draw on together. Your browser also keeps a working copy of the drawing you have open and a few settings (IndexedDB and local storage).</p>
   <h3>What is not done</h3>
-  <p>No ads, no tracking or analytics cookies, no selling or renting of your data, and no AI training on your art. Firebase uses your browser's storage only to keep you signed in.</p>
+  <p>No ads, no tracking or analytics cookies, no selling or renting of your data, and no AI training on your art. Firebase uses your browser's storage to keep you signed in and to remember its bot check.</p>
+  <p><strong>Bot protection:</strong> to stop scripts from misusing the site, Sketchroom checks that requests come from the real site with Google reCAPTCHA (through Firebase App Check). reCAPTCHA looks at hardware and software information, such as device and browser data, sends it to Google to tell people from bots, and may set a cookie for that. Google's <a href="https://policies.google.com/privacy" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" rel="noopener">Terms of Service</a> apply to it.</p>
   <h3>Deleting your data</h3>
   <p>You can delete images, folders, projects, brushes and fonts yourself at any time. To delete your whole account and everything in it, send a privacy request with the contact form.</p>
   <h3>Children</h3>
@@ -91,6 +92,7 @@
     <li><strong>Icons:</strong> many icons are based on <a href="https://lucide.dev" rel="noopener">Lucide</a> (ISC License) and <a href="https://feathericons.com" rel="noopener">Feather</a> (MIT License). Their license texts are below.</li>
     <li><strong>Opening zipped brush files:</strong> <a href="https://github.com/101arrowz/fflate" rel="noopener">fflate</a> by Arjun Barrett (MIT License).</li>
     <li><strong>Sign-in, database and storage:</strong> <a href="https://firebase.google.com" rel="noopener">Google Firebase</a>. Its JavaScript SDK is under the Apache License 2.0.</li>
+    <li><strong>Bot protection:</strong> Google reCAPTCHA Enterprise, through Firebase App Check.</li>
     <li><strong>Built-in brushes:</strong> made for Sketchroom from scratch. Their names describe real-world tools and styles.</li>
   </ul>
   <h3>Lucide (ISC License)</h3>

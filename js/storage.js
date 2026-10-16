@@ -46,6 +46,16 @@ async function initStore() {
   var web = location.protocol === 'http:' || location.protocol === 'https:';
   if (!fb || !cfg || !web) { localStore(); renderBrushes(); rebuildFonts(); renderAccount(); storeReady(); return; }
   try { fb.initializeApp(cfg); } catch (e) { localStore(); renderBrushes(); rebuildFonts(); renderAccount(); storeReady(); return; }
+  // App Check: Firebase can then tell requests from this site (checked by invisible reCAPTCHA) from scripts calling it
+  // directly. Localhost uses a debug token instead (the SDK prints it in the console; add it under App Check >
+  // Manage debug tokens before enforcing). The reCAPTCHA badge is hidden, so the homepage footer carries its notice.
+  if (window.APP_CHECK_KEY && fb.appCheck) {
+    try {
+      if (location.hostname === 'localhost') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      fb.appCheck().activate(new fb.appCheck.ReCaptchaEnterpriseProvider(window.APP_CHECK_KEY), true);
+      document.body.classList.add('appcheck');
+    } catch (e) { /* works without it until App Check is enforced */ }
+  }
   var db = fb.firestore(), auth = fb.auth(), files = fb.storage ? fb.storage() : null;
   store.online = true;
   var lib = { brushes: db.collection('brushes'), fonts: db.collection('fonts') };
