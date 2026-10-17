@@ -1,6 +1,6 @@
 # Sketchroom
 
-A drawing web app in the style of tablet painting apps, for the owner and beta testers. It has:
+A drawing web app in the style of tablet painting apps, public and out of beta since 2026-10-17 (more pen settings may come later). It has:
 - a homepage library of images, folders and projects, saved in each user's account
 - a chosen canvas size for each image, and pixel-art tilesets with crisp pixel tools
 - pressure-aware brushes and a brush editor
